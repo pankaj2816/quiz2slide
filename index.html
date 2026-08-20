@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz2Slide Studio - Free Online PDF to PPTX Quiz Generator</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- PDF.js CDN (Client-side PDF Extraction) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- PptxGenJS CDN (Client-side PowerPoint Presentation Generator) -->
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="logo">
+        <span class="logo-icon">📊</span>
+        <div>
+          <h1>Quiz2Slide <span>Studio</span></h1>
+          <p class="tagline">100% Client-Side PDF Quiz to PowerPoint Generator (Hosted on GitHub Pages)</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span class="status-badge" id="appStatus">● 100% Private (Runs in Browser)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- Step 1: Upload Documents -->
+    <section class="card step-card">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div>
+          <h2>Import Quiz PDF & Template</h2>
+          <p>Upload your quiz or exam paper PDF. All processing happens 100% securely inside your browser.</p>
+        </div>
+      </div>
+
+      <div class="upload-grid">
+        <!-- PDF Dropzone -->
+        <div class="dropzone" id="pdfDropzone">
+          <input type="file" id="pdfFileInput" accept=".pdf" class="file-input">
+          <div class="dropzone-content">
+            <span class="drop-icon">📄</span>
+            <h3>Upload Quiz PDF</h3>
+            <p class="drop-help" id="pdfFileLabel">Drag & drop or click to browse (e.g. QUIZ.pdf)</p>
+          </div>
+        </div>
+
+        <!-- PPTX Template Dropzone -->
+        <div class="dropzone" id="pptDropzone">
+          <input type="file" id="pptFileInput" accept="image/*" class="file-input">
+          <div class="dropzone-content">
+            <span class="drop-icon">🖼️</span>
+            <h3>Slide Background Template</h3>
+            <p class="drop-help" id="pptFileLabel">Default: 7th SST Classroom Chalkboard</p>
+            <button type="button" class="btn btn-secondary btn-sm mt-2" id="btnUseDefaultPpt">Use Default Chalkboard</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 flex-end">
+        <button class="btn btn-primary" id="btnParsePdf" disabled>
+          <span>🔍</span> Parse PDF Questions
+        </button>
+      </div>
+    </section>
+
+    <!-- Step 2: Interactive Target Area Selector -->
+    <section class="card step-card" id="sectionCanvas">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div>
+          <h2>Visual Slide Area Selector</h2>
+          <p>Click and drag on the slide preview to define where questions & options will be placed.</p>
+        </div>
+      </div>
+
+      <div class="canvas-workspace">
+        <div class="canvas-container" id="canvasWrapper">
+          <canvas id="slideCanvas"></canvas>
+          <div class="selection-box" id="selectionBox">
+            <div class="selection-label" id="selectionLabel">Target Area</div>
+            <div class="resize-handle handle-tl"></div>
+            <div class="resize-handle handle-tr"></div>
+            <div class="resize-handle handle-bl"></div>
+            <div class="resize-handle handle-br"></div>
+          </div>
+        </div>
+
+        <div class="canvas-controls">
+          <h3>Target Area Presets</h3>
+          <div class="preset-grid">
+            <button class="preset-btn active" data-preset="chalkboard-left">
+              🏫 Chalkboard (Teacher on Left)
+            </button>
+            <button class="preset-btn" data-preset="chalkboard-right">
+              👨‍🏫 Chalkboard (Teacher on Right)
+            </button>
+            <button class="preset-btn" data-preset="full-center">
+              🖥️ Full Slide (Centered)
+            </button>
+            <button class="preset-btn" data-preset="right-half">
+              📑 Right Half Split (50%)
+            </button>
+          </div>
+
+          <h3 class="mt-4">Coordinates (% of slide)</h3>
+          <div class="coords-grid">
+            <div class="coord-field">
+              <label>Left (%)</label>
+              <input type="number" id="inputLeft" min="0" max="100" step="1" value="36">
+            </div>
+            <div class="coord-field">
+              <label>Top (%)</label>
+              <input type="number" id="inputTop" min="0" max="100" step="1" value="10">
+            </div>
+            <div class="coord-field">
+              <label>Width (%)</label>
+              <input type="number" id="inputWidth" min="10" max="100" step="1" value="55">
+            </div>
+            <div class="coord-field">
+              <label>Height (%)</label>
+              <input type="number" id="inputHeight" min="10" max="100" step="1" value="77">
+            </div>
+          </div>
+
+          <h3 class="mt-4">Smart Layout Settings</h3>
+          <div class="toggle-group">
+            <label class="toggle-label">
+              <input type="checkbox" id="chkFontMaximizer" checked>
+              <span>Dynamic Font Maximizer (14pt - 26pt auto-fill)</span>
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="chk2x2Grid" checked>
+              <span>Smart 2x2 Grid for Short Options</span>
+            </label>
+          </div>
+
+          <h3 class="mt-3">Color Palette</h3>
+          <div class="color-picker-grid">
+            <div class="color-item">
+              <label>Section Tag</label>
+              <input type="color" id="colSection" value="#90CAF9">
+            </div>
+            <div class="color-item">
+              <label>Q. Number</label>
+              <input type="color" id="colQnum" value="#FFD54F">
+            </div>
+            <div class="color-item">
+              <label>Question Text</label>
+              <input type="color" id="colStem" value="#FFFFFF">
+            </div>
+            <div class="color-item">
+              <label>Option Badges</label>
+              <input type="color" id="colOptLabel" value="#FFD700">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: Review & Generate -->
+    <section class="card step-card" id="sectionReview">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="flex-between w-100">
+          <div>
+            <h2>Review Extracted Questions</h2>
+            <p id="questionCountLabel">0 questions ready for export</p>
+          </div>
+          <div class="flex-gap">
+            <input type="text" id="filterInput" class="search-box" placeholder="Search questions...">
+          </div>
+        </div>
+      </div>
+
+      <div class="questions-list" id="questionsList">
+        <div class="empty-state">
+          <p>Please upload a PDF and click "Parse PDF Questions" to review the questions here.</p>
+        </div>
+      </div>
+
+      <div class="generator-footer">
+        <div class="status-box" id="genStatusBox">
+          <span class="status-icon" id="genStatusIcon">✨</span>
+          <span id="genStatusText">Ready to generate presentation.</span>
+        </div>
+        <button class="btn btn-success btn-lg" id="btnGeneratePpt" disabled>
+          <span>🚀</span> Generate PowerPoint (.pptx)
+        </button>
+      </div>
+
+      <!-- Download Result Banner -->
+      <div class="download-banner hidden" id="downloadBanner">
+        <div class="download-info">
+          <span class="success-icon">🎉</span>
+          <div>
+            <h3>Presentation Created Successfully!</h3>
+            <p id="downloadDetails">Slides formatted with smart typography and bounds.</p>
+          </div>
+        </div>
+        <div class="flex-gap">
+          <button id="btnDownloadAgain" class="btn btn-primary">
+            <span>⬇️</span> Download Again
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
