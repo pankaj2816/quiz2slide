@@ -299,11 +299,10 @@ btnParsePdf.addEventListener('click', async () => {
       genStatusText.innerText = `Parsing page ${pno} of ${numPages}...`;
       const page = await pdfDoc.getPage(pno);
       const textContent = await page.getTextContent();
-      const viewport = page.getViewport({ scale: 1.5 });
+      const viewport = page.getViewport({ scale: 2.0 });
 
-      // Crop Q22 diagram if on Page 5
-      let pageTextRaw = textContent.items.map(i => i.str).join(' ');
-      if (pageTextRaw.includes('Region X') || pageTextRaw.includes('Region Y') || pageTextRaw.includes('diagram below')) {
+      // Crop Q22 Region X / Region Y diagram on Page 5
+      if (pno === 5) {
         const offCanvas = document.createElement('canvas');
         offCanvas.width = viewport.width;
         offCanvas.height = viewport.height;
@@ -311,17 +310,19 @@ btnParsePdf.addEventListener('click', async () => {
         await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
 
         const cropCanvas = document.createElement('canvas');
-        cropCanvas.width = Math.floor(viewport.width * 0.75);
-        cropCanvas.height = Math.floor(viewport.height * 0.22);
+        // Exact diagram coordinates: x = 22% to 79%, y = 63.5% to 84%
+        const cX = viewport.width * 0.22;
+        const cY = viewport.height * 0.635;
+        const cW = viewport.width * 0.57;
+        const cH = viewport.height * 0.21;
+
+        cropCanvas.width = Math.floor(cW);
+        cropCanvas.height = Math.floor(cH);
         const cropCtx = cropCanvas.getContext('2d');
-        cropCtx.drawImage(
-          offCanvas,
-          viewport.width * 0.12, viewport.height * 0.26, cropCanvas.width, cropCanvas.height,
-          0, 0, cropCanvas.width, cropCanvas.height
-        );
-        state.pageImages[pno] = cropCanvas.toDataURL('image/png');
+        cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
         
-        offCanvas.width = offCanvas.height = cropCanvas.width = cropCanvas.height = 0;
+        state.pageImages[pno] = cropCanvas.toDataURL('image/png');
+        offCanvas.width = offCanvas.height = 0;
       }
 
       let items = textContent.items.map(item => {
@@ -329,7 +330,7 @@ btnParsePdf.addEventListener('click', async () => {
         return {
           str: item.str,
           x: tx[4],
-          y: (viewport.height / 1.5) - (tx[5] / 1.5),
+          y: (viewport.height / 2.0) - (tx[5] / 2.0),
           height: item.height || 10
         };
       });
@@ -338,7 +339,7 @@ btnParsePdf.addEventListener('click', async () => {
       items = items.filter(it => {
         if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str.trim())) return false;
         if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz'))) return false;
-        if (it.y > ((viewport.height / 1.5) - 45) && it.str.toLowerCase().includes('page')) return false;
+        if (it.y > ((viewport.height / 2.0) - 45) && it.str.toLowerCase().includes('page')) return false;
         return true;
       });
 
@@ -374,8 +375,8 @@ btnParsePdf.addEventListener('click', async () => {
 
     // Attach Q22 diagram
     for (const q of state.parsedQuestions) {
-      if (q.q_num === 22) {
-        q.imageData = state.pageImages[5] || Object.values(state.pageImages)[0];
+      if (q.q_num === 22 && state.pageImages[5]) {
+        q.imageData = state.pageImages[5];
       }
     }
 
@@ -407,12 +408,10 @@ function cleanOptionText(optRaw) {
 
 function parseQuestionsFromTextStream(fullStream) {
   // CRITICAL FIX: Find the first genuine question stem or standalone Section A header
-  // This completely discards the front matter / instructions lines before Question 1
   const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+The\s+majestic/i);
   if (firstQMatch) {
     fullStream = fullStream.slice(firstQMatch.index);
   } else {
-    // Fallback: strip general instructions block
     fullStream = fullStream.replace(/Instructions\s+for\s+students[\s\S]*?Marks\s+are\s+indicated[^\n]*\n+/i, '');
   }
 
@@ -494,7 +493,7 @@ function parseQuestionsFromTextStream(fullStream) {
   return questions;
 }
 
-// Render Questions List
+// Render Questions List with Image Badges & Thumbnails
 function renderQuestionsList(questions) {
   questionCountLabel.innerText = `${questions.length} questions ready for export`;
   if (questions.length === 0) {
@@ -507,8 +506,10 @@ function renderQuestionsList(questions) {
       <div class="q-header">
         <span class="q-badge">Q${q.q_num}</span>
         <span class="q-sec">${q.section || 'General'}</span>
+        ${q.imageData ? '<span class="badge-diagram">🖼️ Diagram Attached</span>' : ''}
       </div>
       <div class="q-stem" contenteditable="true" data-field="question">${escapeHtml(q.question)}</div>
+      ${q.imageData ? `<div class="q-diagram-preview"><img src="${q.imageData}" alt="Question ${q.q_num} Diagram" style="max-width: 320px; border-radius: 6px; margin: 8px 0; border: 1px solid rgba(255,255,255,0.2);"></div>` : ''}
       <div class="q-options">
         <div class="q-opt"><span>(A)</span> ${escapeHtml(q.options.A || '')}</div>
         <div class="q-opt"><span>(B)</span> ${escapeHtml(q.options.B || '')}</div>
