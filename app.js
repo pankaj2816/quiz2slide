@@ -8,6 +8,7 @@ let state = {
   bgImageBase64: typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : null,
   parsedQuestions: [],
   pageImages: {}, // { pageNum: base64Data }
+  lastGeneratedBlob: null,
   bbox: {
     left_ratio: 0.36,
     top_ratio: 0.10,
@@ -522,7 +523,7 @@ filterInput.addEventListener('input', (e) => {
   });
 });
 
-// High-Performance Client-Side PowerPoint Generator
+// High-Performance Client-Side PowerPoint Generator with Directory Prompt
 function setupGenerator() {
   btnGeneratePpt.addEventListener('click', async () => {
     if (state.parsedQuestions.length === 0) return;
@@ -703,12 +704,42 @@ function setupGenerator() {
 
       genStatusText.innerText = 'Packaging presentation file...';
       const outName = `Quiz_Presentation_${state.parsedQuestions.length}_Slides.pptx`;
-      await pptx.writeFile({ fileName: outName });
+      const pptBlob = await pptx.write({ outputType: 'blob' });
+      state.lastGeneratedBlob = pptBlob;
 
-      downloadBanner.classList.remove('hidden');
-      downloadDetails.innerText = `${state.parsedQuestions.length} slides exported directly to your Downloads folder!`;
-      genStatusText.innerText = '✨ Presentation generated and downloaded successfully!';
-      downloadBanner.scrollIntoView({ behavior: 'smooth' });
+      // Ask User for Directory to Save using Native Browser "Save As" Dialog
+      if ('showSaveFilePicker' in window) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: outName,
+            types: [{
+              description: 'PowerPoint Presentation (*.pptx)',
+              accept: { 'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'] }
+            }]
+          });
+          genStatusText.innerText = 'Writing to selected folder...';
+          const writableStream = await fileHandle.createWritable();
+          await writableStream.write(pptBlob);
+          await writableStream.close();
+
+          downloadBanner.classList.remove('hidden');
+          downloadDetails.innerText = `Saved successfully to your chosen folder as: ${fileHandle.name}`;
+          genStatusText.innerText = '✨ Presentation saved successfully!';
+          downloadBanner.scrollIntoView({ behavior: 'smooth' });
+        } catch (saveErr) {
+          if (saveErr.name === 'AbortError') {
+            genStatusText.innerText = 'Save dialog was closed. Click button below to save again.';
+            downloadBanner.classList.remove('hidden');
+            downloadDetails.innerText = 'Click "Save Presentation As..." to pick a folder.';
+            return;
+          }
+          // Fallback to standard trigger
+          downloadBlobDirectly(pptBlob, outName);
+        }
+      } else {
+        // Fallback for browsers without File System Access API
+        downloadBlobDirectly(pptBlob, outName);
+      }
 
     } catch (err) {
       alert('Error generating PowerPoint: ' + err.message);
@@ -718,9 +749,48 @@ function setupGenerator() {
     }
   });
 
-  btnDownloadAgain.addEventListener('click', () => {
-    btnGeneratePpt.click();
+  btnDownloadAgain.addEventListener('click', async () => {
+    const outName = `Quiz_Presentation_${state.parsedQuestions.length || 96}_Slides.pptx`;
+    if (state.lastGeneratedBlob) {
+      if ('showSaveFilePicker' in window) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: outName,
+            types: [{
+              description: 'PowerPoint Presentation (*.pptx)',
+              accept: { 'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'] }
+            }]
+          });
+          const writableStream = await fileHandle.createWritable();
+          await writableStream.write(state.lastGeneratedBlob);
+          await writableStream.close();
+          downloadDetails.innerText = `Saved to: ${fileHandle.name}`;
+        } catch (e) {
+          if (e.name !== 'AbortError') {
+            downloadBlobDirectly(state.lastGeneratedBlob, outName);
+          }
+        }
+      } else {
+        downloadBlobDirectly(state.lastGeneratedBlob, outName);
+      }
+    } else {
+      btnGeneratePpt.click();
+    }
   });
+}
+
+function downloadBlobDirectly(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  downloadBanner.classList.remove('hidden');
+  downloadDetails.innerText = `Saved to your Downloads folder as: ${filename}`;
+  genStatusText.innerText = '✨ Presentation generated successfully!';
 }
 
 function escapeHtml(text) {
