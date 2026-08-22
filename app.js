@@ -5,7 +5,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 let state = {
   pdfArrayBuffer: null,
   pdfFileName: '',
-  bgImageBase64: typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : 'chalkboard_bg.png',
+  bgImageBase64: typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : null,
   parsedQuestions: [],
   pageImages: {}, // { pageNum: base64Data }
   bbox: {
@@ -96,12 +96,10 @@ function setupFileUploads() {
       const ext = file.name.split('.').pop().toLowerCase();
       
       if (ext === 'pptx') {
-        // Extract background image from PPTX using JSZip client-side
         try {
           const zip = await JSZip.loadAsync(file);
           const mediaFiles = Object.keys(zip.files).filter(f => f.startsWith('ppt/media/') && (f.endsWith('.png') || f.endsWith('.jpg') || f.endsWith('.jpeg')));
           if (mediaFiles.length > 0) {
-            // Find largest image in PPTX
             let largestName = mediaFiles[0];
             let largestSize = 0;
             for (const mf of mediaFiles) {
@@ -127,7 +125,6 @@ function setupFileUploads() {
           alert('Could not read PPTX: ' + err.message);
         }
       } else {
-        // Direct Image
         const reader = new FileReader();
         reader.onload = function(evt) {
           state.bgImageBase64 = evt.target.result;
@@ -142,7 +139,7 @@ function setupFileUploads() {
 
   btnUseDefaultPpt.addEventListener('click', (e) => {
     e.stopPropagation();
-    state.bgImageBase64 = typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : 'chalkboard_bg.png';
+    state.bgImageBase64 = typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : null;
     pptDropzone.classList.remove('has-file');
     pptFileLabel.innerText = 'Default: 7th SST Classroom Chalkboard';
     loadDefaultTemplatePreview();
@@ -150,7 +147,11 @@ function setupFileUploads() {
 }
 
 function loadDefaultTemplatePreview() {
-  renderCanvasImage(state.bgImageBase64);
+  if (state.bgImageBase64) {
+    renderCanvasImage(state.bgImageBase64);
+  } else {
+    renderCanvasImage('chalkboard_bg.png');
+  }
 }
 
 let templateImg = new Image();
@@ -277,7 +278,7 @@ function setupPresets() {
   });
 }
 
-// Client-Side PDF Parser using PDF.js
+// Memory-Efficient Client-Side PDF Parser using PDF.js
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
@@ -294,24 +295,23 @@ btnParsePdf.addEventListener('click', async () => {
     state.pageImages = {};
 
     for (let pno = 1; pno <= numPages; pno++) {
+      genStatusText.innerText = `Parsing page ${pno} of ${numPages}...`;
       const page = await pdfDoc.getPage(pno);
       const textContent = await page.getTextContent();
       const viewport = page.getViewport({ scale: 1.5 });
 
-      // Check if this page has Question 22 or diagrams to snapshot
+      // Crop Q22 diagram if on Page 5
       let pageTextRaw = textContent.items.map(i => i.str).join(' ');
       if (pageTextRaw.includes('Region X') || pageTextRaw.includes('diagram below')) {
-        // Render diagram snippet from page canvas
         const offCanvas = document.createElement('canvas');
         offCanvas.width = viewport.width;
         offCanvas.height = viewport.height;
         const offCtx = offCanvas.getContext('2d');
         await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
 
-        // Crop middle region of page 5 where diagram is located
         const cropCanvas = document.createElement('canvas');
-        cropCanvas.width = viewport.width * 0.75;
-        cropCanvas.height = viewport.height * 0.22;
+        cropCanvas.width = Math.floor(viewport.width * 0.75);
+        cropCanvas.height = Math.floor(viewport.height * 0.22);
         const cropCtx = cropCanvas.getContext('2d');
         cropCtx.drawImage(
           offCanvas,
@@ -319,6 +319,9 @@ btnParsePdf.addEventListener('click', async () => {
           0, 0, cropCanvas.width, cropCanvas.height
         );
         state.pageImages[pno] = cropCanvas.toDataURL('image/png');
+        
+        // Clean up canvases immediately
+        offCanvas.width = offCanvas.height = cropCanvas.width = cropCanvas.height = 0;
       }
 
       let items = textContent.items.map(item => {
@@ -331,7 +334,7 @@ btnParsePdf.addEventListener('click', async () => {
         };
       });
 
-      // Filter right-edge marks column and headers/footers
+      // Filter marks on right edge and headers/footers
       items = items.filter(it => {
         if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str.trim())) return false;
         if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz'))) return false;
@@ -360,12 +363,13 @@ btnParsePdf.addEventListener('click', async () => {
           fullLines.push(lineText);
         }
       }
+
+      page.cleanup();
     }
 
     const fullStream = fullLines.join('\n');
     state.parsedQuestions = parseQuestionsFromTextStream(fullStream);
 
-    // Attach Q22 diagram if available
     for (const q of state.parsedQuestions) {
       if (q.q_num === 22 && state.pageImages[5]) {
         q.imageData = state.pageImages[5];
@@ -426,11 +430,8 @@ function parseQuestionsFromTextStream(fullStream) {
     }
 
     let rawBlock = fullStream.slice(qStart, qEnd).trim();
-
-    // Separate inline sub-statements (A), (B) if attached
     rawBlock = rawBlock.replace(/(?<=[.:;?!])\s*\(\s*([A-D])\s*\)\s*/g, '\n($1) ');
 
-    // Robust Option Matching
     const optRegex = /(?:^|\s)(?:\(\s*([A-Da-d])\s*\)|([A-Da-d])[\.\)])\s+/g;
     let optMatches = [];
     let m;
@@ -454,7 +455,6 @@ function parseQuestionsFromTextStream(fullStream) {
       optD = cleanOptionText(rawBlock.slice(mD.index + mD[0].length));
     }
 
-    // Statement Normalization
     let stemLines = stem.split('\n').map(l => cleanText(l)).filter(l => l && !isHeaderOrFooter(l));
     const optCombined = `${optA} ${optB} ${optC} ${optD}`.toLowerCase();
     if (optCombined.includes('1 and 2') || optCombined.includes('statement 1') || optCombined.includes('pair')) {
@@ -523,14 +523,14 @@ filterInput.addEventListener('input', (e) => {
   });
 });
 
-// Client-Side PowerPoint Generator using PptxGenJS
+// High-Performance / Low-Memory Client-Side PowerPoint Generator using PptxGenJS
 function setupGenerator() {
   btnGeneratePpt.addEventListener('click', async () => {
     if (state.parsedQuestions.length === 0) return;
 
     btnGeneratePpt.disabled = true;
-    btnGeneratePpt.innerHTML = '<span>⏳</span> Generating PowerPoint in browser...';
-    genStatusText.innerText = 'Creating presentation slides...';
+    btnGeneratePpt.innerHTML = '<span>⏳</span> Generating PowerPoint...';
+    genStatusText.innerText = 'Initializing presentation...';
 
     try {
       const pptx = new PptxGenJS();
@@ -549,19 +549,28 @@ function setupGenerator() {
       const colStemHex = colStem.value.replace('#', '');
       const colOptLblHex = colOptLabel.value.replace('#', '');
 
-      for (const q of state.parsedQuestions) {
-        const slide = pptx.addSlide();
+      // CRITICAL FIX: Define Slide Master ONCE with background image to avoid 96x memory duplication
+      if (state.bgImageBase64) {
+        pptx.defineSlideMaster({
+          title: "CHALKBOARD_MASTER",
+          background: { data: state.bgImageBase64 }
+        });
+      }
 
-        // 1. Set Slide Background Image
-        if (state.bgImageBase64) {
-          slide.addImage({
-            data: state.bgImageBase64,
-            x: 0,
-            y: 0,
-            w: slideW,
-            h: slideH
-          });
+      const totalQs = state.parsedQuestions.length;
+
+      for (let idx = 0; idx < totalQs; idx++) {
+        const q = state.parsedQuestions[idx];
+
+        // Yield event loop every 5 slides so browser doesn't freeze or hit OOM limit
+        if (idx % 5 === 0) {
+          genStatusText.innerText = `Formatting slide ${idx + 1} of ${totalQs}...`;
+          await new Promise(resolve => setTimeout(resolve, 0));
         }
+
+        const slide = state.bgImageBase64 
+          ? pptx.addSlide({ masterName: "CHALKBOARD_MASTER" })
+          : pptx.addSlide();
 
         const stemLines = q.question.split('\n');
         const maxOptLen = Math.max(
@@ -571,7 +580,7 @@ function setupGenerator() {
           (q.options.D || '').length
         );
 
-        // 2. Question with Diagram (e.g. Q22)
+        // 1. Question with Diagram (e.g. Q22)
         if (q.imageData) {
           const topH = 1.1;
           const textRunsTop = [];
@@ -583,14 +592,12 @@ function setupGenerator() {
 
           slide.addText(textRunsTop, { x: bLeft, y: bTop, w: bWidth, h: topH, wrap: true, valign: 'top' });
 
-          // Add Diagram
           const diagW = 3.6;
           const diagH = 1.85;
           const diagL = bLeft + (bWidth - diagW) / 2;
           const diagT = bTop + topH + 0.05;
           slide.addImage({ data: q.imageData, x: diagL, y: diagT, w: diagW, h: diagH });
 
-          // Bottom Prompt & Options
           const botT = diagT + diagH + 0.05;
           const botH = (bTop + bHeight) - botT;
           const textRunsBot = [];
@@ -608,7 +615,7 @@ function setupGenerator() {
           continue;
         }
 
-        // 3. 2x2 Grid Layout for Short Options
+        // 2. 2x2 Grid Layout for Short Options
         const isShortMcq = chk2x2Grid.checked && (maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1);
         if (isShortMcq) {
           const qTextRuns = [];
@@ -651,7 +658,7 @@ function setupGenerator() {
           continue;
         }
 
-        // 4. Standard Vertical Layout with Dynamic Typography
+        // 3. Standard Vertical Layout with Dynamic Typography
         let stPt = 20, optPt = 17, spPt = 10;
         const totalChars = q.question.length + (q.options.A || '').length + (q.options.B || '').length + (q.options.C || '').length + (q.options.D || '').length;
 
@@ -692,11 +699,12 @@ function setupGenerator() {
         });
       }
 
+      genStatusText.innerText = 'Packaging presentation file...';
       const outName = `Quiz_Presentation_${state.parsedQuestions.length}_Slides.pptx`;
       await pptx.writeFile({ fileName: outName });
 
       downloadBanner.classList.remove('hidden');
-      downloadDetails.innerText = `${state.parsedQuestions.length} slides formatted with smart typography and chalkboard bounds.`;
+      downloadDetails.innerText = `${state.parsedQuestions.length} slides exported directly to your Downloads folder!`;
       genStatusText.innerText = '✨ Presentation generated and downloaded successfully!';
       downloadBanner.scrollIntoView({ behavior: 'smooth' });
 
