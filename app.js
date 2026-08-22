@@ -303,7 +303,7 @@ btnParsePdf.addEventListener('click', async () => {
 
       // Crop Q22 diagram if on Page 5
       let pageTextRaw = textContent.items.map(i => i.str).join(' ');
-      if (pageTextRaw.includes('Region X') || pageTextRaw.includes('diagram below')) {
+      if (pageTextRaw.includes('Region X') || pageTextRaw.includes('Region Y') || pageTextRaw.includes('diagram below')) {
         const offCanvas = document.createElement('canvas');
         offCanvas.width = viewport.width;
         offCanvas.height = viewport.height;
@@ -356,12 +356,33 @@ btnParsePdf.addEventListener('click', async () => {
 
       lines.sort((a, b) => a.y - b.y);
 
+      let pageLines = [];
       for (const l of lines) {
         l.items.sort((a, b) => a.x - b.x);
         let lineText = l.items.map(i => i.str).join(' ').trim();
         if (lineText && !isHeaderOrFooter(lineText)) {
-          fullLines.push(lineText);
+          pageLines.push(lineText);
         }
+      }
+
+      // Clean Page 1: Filter out general instructions before Section A / Question 1
+      if (pno === 1) {
+        let cleanP1Lines = [];
+        let pastInstructions = false;
+        for (const lineText of pageLines) {
+          if (lineText.includes('Section A:') || (/^(?:Q\.?\s*1|1\.)\s+The majestic/i.test(lineText))) {
+            pastInstructions = true;
+          }
+          if (!pastInstructions) {
+            if (/^(?:Total Questions|Time Allowed|Maximum Marks|General Instructions:?|[1-4]\.\s+(?:This paper|The Test|All questions|Marks are|Each question))/i.test(lineText)) {
+              continue;
+            }
+          }
+          cleanP1Lines.push(lineText);
+        }
+        fullLines.push(...cleanP1Lines);
+      } else {
+        fullLines.push(...pageLines);
       }
 
       page.cleanup();
@@ -370,9 +391,10 @@ btnParsePdf.addEventListener('click', async () => {
     const fullStream = fullLines.join('\n');
     state.parsedQuestions = parseQuestionsFromTextStream(fullStream);
 
+    // Attach Q22 diagram
     for (const q of state.parsedQuestions) {
-      if (q.q_num === 22 && state.pageImages[5]) {
-        q.imageData = state.pageImages[5];
+      if (q.q_num === 22) {
+        q.imageData = state.pageImages[5] || Object.values(state.pageImages)[0];
       }
     }
 
@@ -733,11 +755,9 @@ function setupGenerator() {
             downloadDetails.innerText = 'Click "Save Presentation As..." to pick a folder.';
             return;
           }
-          // Fallback to standard trigger
           downloadBlobDirectly(pptBlob, outName);
         }
       } else {
-        // Fallback for browsers without File System Access API
         downloadBlobDirectly(pptBlob, outName);
       }
 
