@@ -11,8 +11,12 @@
   
   <!-- PDF.js CDN (Client-side PDF Extraction) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- JSZip CDN (Client-side PPTX Zip Extraction) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- PptxGenJS CDN (Client-side PowerPoint Presentation Generator) -->
   <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <!-- Embedded Default Template Base64 -->
+  <script src="chalkboard_b64.js"></script>
 </head>
 <body>
 
@@ -23,7 +27,7 @@
         <span class="logo-icon">📊</span>
         <div>
           <h1>Quiz2Slide <span>Studio</span></h1>
-          <p class="tagline">100% Client-Side PDF Quiz to PowerPoint Generator (Hosted on GitHub Pages)</p>
+          <p class="tagline">Smart PDF Quiz to PowerPoint Presentation Generator (100% Client-Side / GitHub Pages)</p>
         </div>
       </div>
       <div class="header-actions">
@@ -58,10 +62,10 @@
 
         <!-- PPTX Template Dropzone -->
         <div class="dropzone" id="pptDropzone">
-          <input type="file" id="pptFileInput" accept="image/*" class="file-input">
+          <input type="file" id="pptFileInput" accept=".pptx,image/*" class="file-input">
           <div class="dropzone-content">
             <span class="drop-icon">🖼️</span>
-            <h3>Slide Background Template</h3>
+            <h3>PowerPoint Template or Background</h3>
             <p class="drop-help" id="pptFileLabel">Default: 7th SST Classroom Chalkboard</p>
             <button type="button" class="btn btn-secondary btn-sm mt-2" id="btnUseDefaultPpt">Use Default Chalkboard</button>
           </div>

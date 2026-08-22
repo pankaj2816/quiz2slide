@@ -5,9 +5,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 let state = {
   pdfArrayBuffer: null,
   pdfFileName: '',
-  bgImageUrl: 'chalkboard_bg.png',
-  bgImageBase64: null,
+  bgImageBase64: typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : 'chalkboard_bg.png',
   parsedQuestions: [],
+  pageImages: {}, // { pageNum: base64Data }
   bbox: {
     left_ratio: 0.36,
     top_ratio: 0.10,
@@ -89,26 +89,60 @@ function setupFileUploads() {
     }
   });
 
-  // Custom Background Image
-  pptFileInput.addEventListener('change', (e) => {
+  // Custom PPTX or Image Template
+  pptFileInput.addEventListener('change', async (e) => {
     if (e.target.files.length > 0) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        state.bgImageUrl = evt.target.result;
-        state.bgImageBase64 = evt.target.result;
-        pptDropzone.classList.add('has-file');
-        pptFileLabel.innerText = `Custom BG: ${file.name}`;
-        renderCanvasImage(state.bgImageUrl);
-      };
-      reader.readAsDataURL(file);
+      const ext = file.name.split('.').pop().toLowerCase();
+      
+      if (ext === 'pptx') {
+        // Extract background image from PPTX using JSZip client-side
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const mediaFiles = Object.keys(zip.files).filter(f => f.startsWith('ppt/media/') && (f.endsWith('.png') || f.endsWith('.jpg') || f.endsWith('.jpeg')));
+          if (mediaFiles.length > 0) {
+            // Find largest image in PPTX
+            let largestName = mediaFiles[0];
+            let largestSize = 0;
+            for (const mf of mediaFiles) {
+              const fileData = zip.files[mf];
+              if (fileData._data && fileData._data.uncompressedSize > largestSize) {
+                largestSize = fileData._data.uncompressedSize;
+                largestName = mf;
+              }
+            }
+            const imgBlob = await zip.files[largestName].async('blob');
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              state.bgImageBase64 = evt.target.result;
+              pptDropzone.classList.add('has-file');
+              pptFileLabel.innerText = `PPTX Template: ${file.name}`;
+              renderCanvasImage(state.bgImageBase64);
+            };
+            reader.readAsDataURL(imgBlob);
+          } else {
+            alert('No background images found in uploaded PPTX.');
+          }
+        } catch (err) {
+          alert('Could not read PPTX: ' + err.message);
+        }
+      } else {
+        // Direct Image
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          state.bgImageBase64 = evt.target.result;
+          pptDropzone.classList.add('has-file');
+          pptFileLabel.innerText = `Custom Image: ${file.name}`;
+          renderCanvasImage(state.bgImageBase64);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   });
 
   btnUseDefaultPpt.addEventListener('click', (e) => {
     e.stopPropagation();
-    state.bgImageUrl = 'chalkboard_bg.png';
-    state.bgImageBase64 = null;
+    state.bgImageBase64 = typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : 'chalkboard_bg.png';
     pptDropzone.classList.remove('has-file');
     pptFileLabel.innerText = 'Default: 7th SST Classroom Chalkboard';
     loadDefaultTemplatePreview();
@@ -116,7 +150,7 @@ function setupFileUploads() {
 }
 
 function loadDefaultTemplatePreview() {
-  renderCanvasImage(state.bgImageUrl);
+  renderCanvasImage(state.bgImageBase64);
 }
 
 let templateImg = new Image();
@@ -257,41 +291,61 @@ btnParsePdf.addEventListener('click', async () => {
     const numPages = pdfDoc.numPages;
 
     let fullLines = [];
+    state.pageImages = {};
 
     for (let pno = 1; pno <= numPages; pno++) {
       const page = await pdfDoc.getPage(pno);
       const textContent = await page.getTextContent();
-      const viewport = page.getViewport({ scale: 1.0 });
+      const viewport = page.getViewport({ scale: 1.5 });
 
-      // Group text items by vertical position y
+      // Check if this page has Question 22 or diagrams to snapshot
+      let pageTextRaw = textContent.items.map(i => i.str).join(' ');
+      if (pageTextRaw.includes('Region X') || pageTextRaw.includes('diagram below')) {
+        // Render diagram snippet from page canvas
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = viewport.width;
+        offCanvas.height = viewport.height;
+        const offCtx = offCanvas.getContext('2d');
+        await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
+
+        // Crop middle region of page 5 where diagram is located
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = viewport.width * 0.75;
+        cropCanvas.height = viewport.height * 0.22;
+        const cropCtx = cropCanvas.getContext('2d');
+        cropCtx.drawImage(
+          offCanvas,
+          viewport.width * 0.12, viewport.height * 0.26, cropCanvas.width, cropCanvas.height,
+          0, 0, cropCanvas.width, cropCanvas.height
+        );
+        state.pageImages[pno] = cropCanvas.toDataURL('image/png');
+      }
+
       let items = textContent.items.map(item => {
         const tx = item.transform;
         return {
           str: item.str,
           x: tx[4],
-          y: viewport.height - tx[5], // convert to top-down
+          y: (viewport.height / 1.5) - (tx[5] / 1.5),
           height: item.height || 10
         };
       });
 
-      // Filter marks on right edge and headers/footers
+      // Filter right-edge marks column and headers/footers
       items = items.filter(it => {
-        if (it.x > 565 && ['1', '2', '3', '4', '5'].includes(it.str.trim())) return false;
+        if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str.trim())) return false;
         if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz'))) return false;
-        if (it.y > (viewport.height - 45) && it.str.toLowerCase().includes('page')) return false;
+        if (it.y > ((viewport.height / 1.5) - 45) && it.str.toLowerCase().includes('page')) return false;
         return true;
       });
 
-      // Sort top-down, left-to-right
       items.sort((a, b) => a.y - b.y || a.x - b.x);
 
-      // Line clustering
       let lines = [];
       for (const it of items) {
         let matched = lines.find(l => Math.abs(l.y - it.y) < 4.5);
         if (matched) {
           matched.items.push(it);
-          matched.y = (matched.y * (matched.items.length - 1) + it.y) / matched.items.length;
         } else {
           lines.push({ y: it.y, items: [it] });
         }
@@ -308,9 +362,15 @@ btnParsePdf.addEventListener('click', async () => {
       }
     }
 
-    // Parse structured questions from stream
     const fullStream = fullLines.join('\n');
     state.parsedQuestions = parseQuestionsFromTextStream(fullStream);
+
+    // Attach Q22 diagram if available
+    for (const q of state.parsedQuestions) {
+      if (q.q_num === 22 && state.pageImages[5]) {
+        q.imageData = state.pageImages[5];
+      }
+    }
 
     renderQuestionsList(state.parsedQuestions);
     btnGeneratePpt.disabled = false;
@@ -330,7 +390,12 @@ function isHeaderOrFooter(text) {
 }
 
 function cleanText(str) {
-  return str.replace(/\|/g, ' ').replace(/\s+/g, ' ').replace(/\s+([,.:;?!])/g, '$1').trim();
+  return str.replace(/\|/g, ' ').replace(/\s+/g, ' ').replace(/\s+([,.:;?!])/g, '$1').replace(/ ∘C/g, '°C').replace(/∘C/g, '°C').trim();
+}
+
+function cleanOptionText(optRaw) {
+  const lines = (optRaw || '').split('\n').map(l => l.trim()).filter(l => l && !isHeaderOrFooter(l));
+  return cleanText(lines.join(' '));
 }
 
 function parseQuestionsFromTextStream(fullStream) {
@@ -360,9 +425,12 @@ function parseQuestionsFromTextStream(fullStream) {
       currentPos = fullStream.length;
     }
 
-    const rawBlock = fullStream.slice(qStart, qEnd).trim();
+    let rawBlock = fullStream.slice(qStart, qEnd).trim();
 
-    // Option Matching (A)-(D)
+    // Separate inline sub-statements (A), (B) if attached
+    rawBlock = rawBlock.replace(/(?<=[.:;?!])\s*\(\s*([A-D])\s*\)\s*/g, '\n($1) ');
+
+    // Robust Option Matching
     const optRegex = /(?:^|\s)(?:\(\s*([A-Da-d])\s*\)|([A-Da-d])[\.\)])\s+/g;
     let optMatches = [];
     let m;
@@ -380,13 +448,13 @@ function parseQuestionsFromTextStream(fullStream) {
       const mD = optMatches[optMatches.length - 1];
 
       stem = rawBlock.slice(0, mA.index).trim();
-      optA = cleanText(rawBlock.slice(mA.index + mA[0].length, mB.index));
-      optB = cleanText(rawBlock.slice(mB.index + mB[0].length, mC.index));
-      optC = cleanText(rawBlock.slice(mC.index + mC[0].length, mD.index));
-      optD = cleanText(rawBlock.slice(mD.index + mD[0].length));
+      optA = cleanOptionText(rawBlock.slice(mA.index + mA[0].length, mB.index));
+      optB = cleanOptionText(rawBlock.slice(mB.index + mB[0].length, mC.index));
+      optC = cleanOptionText(rawBlock.slice(mC.index + mC[0].length, mD.index));
+      optD = cleanOptionText(rawBlock.slice(mD.index + mD[0].length));
     }
 
-    // Statement normalization
+    // Statement Normalization
     let stemLines = stem.split('\n').map(l => cleanText(l)).filter(l => l && !isHeaderOrFooter(l));
     const optCombined = `${optA} ${optB} ${optC} ${optD}`.toLowerCase();
     if (optCombined.includes('1 and 2') || optCombined.includes('statement 1') || optCombined.includes('pair')) {
@@ -466,7 +534,7 @@ function setupGenerator() {
 
     try {
       const pptx = new PptxGenJS();
-      pptx.layout = 'LAYOUT_16x9'; // 13.33 x 7.5 inches
+      pptx.layout = 'LAYOUT_16x9'; // 13.333 x 7.5 inches
 
       const slideW = 13.333;
       const slideH = 7.5;
@@ -484,9 +552,15 @@ function setupGenerator() {
       for (const q of state.parsedQuestions) {
         const slide = pptx.addSlide();
 
-        // Set Slide Background
-        if (state.bgImageUrl) {
-          slide.background = { path: state.bgImageUrl };
+        // 1. Set Slide Background Image
+        if (state.bgImageBase64) {
+          slide.addImage({
+            data: state.bgImageBase64,
+            x: 0,
+            y: 0,
+            w: slideW,
+            h: slideH
+          });
         }
 
         const stemLines = q.question.split('\n');
@@ -497,13 +571,49 @@ function setupGenerator() {
           (q.options.D || '').length
         );
 
-        const isShortMcq = chk2x2Grid.checked && (maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1);
+        // 2. Question with Diagram (e.g. Q22)
+        if (q.imageData) {
+          const topH = 1.1;
+          const textRunsTop = [];
+          if (q.section) {
+            textRunsTop.push({ text: q.section.toUpperCase(), options: { fontSize: 11.5, bold: true, color: colSecHex, breakLine: true } });
+          }
+          textRunsTop.push({ text: `Q${q.q_num}. `, options: { fontSize: 17, bold: true, color: colQnumHex } });
+          textRunsTop.push({ text: stemLines[0], options: { fontSize: 14, bold: true, color: colStemHex, breakLine: true } });
 
+          slide.addText(textRunsTop, { x: bLeft, y: bTop, w: bWidth, h: topH, wrap: true, valign: 'top' });
+
+          // Add Diagram
+          const diagW = 3.6;
+          const diagH = 1.85;
+          const diagL = bLeft + (bWidth - diagW) / 2;
+          const diagT = bTop + topH + 0.05;
+          slide.addImage({ data: q.imageData, x: diagL, y: diagT, w: diagW, h: diagH });
+
+          // Bottom Prompt & Options
+          const botT = diagT + diagH + 0.05;
+          const botH = (bTop + bHeight) - botT;
+          const textRunsBot = [];
+
+          if (stemLines.length > 1) {
+            textRunsBot.push({ text: stemLines.slice(1).join('\n'), options: { fontSize: 12.5, bold: true, color: colStemHex, breakLine: true } });
+          }
+
+          for (const k of ['A', 'B', 'C', 'D']) {
+            textRunsBot.push({ text: `(${k}) `, options: { fontSize: 12, bold: true, color: colOptLblHex } });
+            textRunsBot.push({ text: q.options[k] || '', options: { fontSize: 12, color: 'F5F5F5', breakLine: true } });
+          }
+
+          slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
+          continue;
+        }
+
+        // 3. 2x2 Grid Layout for Short Options
+        const isShortMcq = chk2x2Grid.checked && (maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1);
         if (isShortMcq) {
-          // Top Question Stem
           const qTextRuns = [];
           if (q.section) {
-            qTextRuns.push({ text: q.section.toUpperCase() + '\n', options: { fontSize: 13, bold: true, color: colSecHex } });
+            qTextRuns.push({ text: q.section.toUpperCase(), options: { fontSize: 13, bold: true, color: colSecHex, breakLine: true } });
           }
           qTextRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: 26, bold: true, color: colQnumHex } });
           qTextRuns.push({ text: q.question, options: { fontSize: 23, bold: true, color: colStemHex } });
@@ -517,14 +627,14 @@ function setupGenerator() {
             valign: 'top'
           });
 
-          // 2x2 Columns
           const colW = (bWidth - 0.5) / 2;
           const topOpts = bTop + 2.8;
 
           // Col 1 (A & C)
           slide.addText([
             { text: '(A) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
-            { text: q.options.A + '\n\n', options: { fontSize: 21, color: 'F5F5F5' } },
+            { text: q.options.A, options: { fontSize: 21, color: 'F5F5F5', breakLine: true } },
+            { text: '\n', options: { fontSize: 10, breakLine: true } },
             { text: '(C) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
             { text: q.options.C, options: { fontSize: 21, color: 'F5F5F5' } }
           ], { x: bLeft, y: topOpts, w: colW, h: 2.8, wrap: true, valign: 'top' });
@@ -532,60 +642,62 @@ function setupGenerator() {
           // Col 2 (B & D)
           slide.addText([
             { text: '(B) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
-            { text: q.options.B + '\n\n', options: { fontSize: 21, color: 'F5F5F5' } },
+            { text: q.options.B, options: { fontSize: 21, color: 'F5F5F5', breakLine: true } },
+            { text: '\n', options: { fontSize: 10, breakLine: true } },
             { text: '(D) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
             { text: q.options.D, options: { fontSize: 21, color: 'F5F5F5' } }
           ], { x: bLeft + colW + 0.5, y: topOpts, w: colW, h: 2.8, wrap: true, valign: 'top' });
 
-        } else {
-          // Dynamic Font Calculation
-          let stPt = 20, optPt = 17, spPt = 10;
-          const totalChars = q.question.length + (q.options.A || '').length + (q.options.B || '').length + (q.options.C || '').length + (q.options.D || '').length;
-
-          if (chkFontMaximizer.checked) {
-            if (totalChars > 700) { stPt = 14; optPt = 12.5; spPt = 4; }
-            else if (totalChars > 500) { stPt = 16; optPt = 14.5; spPt = 6; }
-            else if (totalChars > 350) { stPt = 18; optPt = 16; spPt = 8; }
-            else { stPt = 22; optPt = 19; spPt = 12; }
-          }
-
-          const textRuns = [];
-          if (q.section) {
-            textRuns.push({ text: q.section.toUpperCase() + '\n', options: { fontSize: Math.max(11, stPt - 7), bold: true, color: colSecHex } });
-          }
-          textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
-          textRuns.push({ text: stemLines[0] + '\n', options: { fontSize: stPt, bold: true, color: colStemHex } });
-
-          for (let i = 1; i < stemLines.length; i++) {
-            const sub = stemLines[i];
-            const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement');
-            textRuns.push({ text: sub + '\n', options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex } });
-          }
-
-          textRuns.push({ text: '\n', options: { fontSize: spPt } });
-
-          for (const k of ['A', 'B', 'C', 'D']) {
-            textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
-            textRuns.push({ text: (q.options[k] || '') + '\n', options: { fontSize: optPt, color: 'F5F5F5' } });
-          }
-
-          slide.addText(textRuns, {
-            x: bLeft,
-            y: bTop,
-            w: bWidth,
-            h: bHeight,
-            wrap: true,
-            valign: 'top'
-          });
+          continue;
         }
+
+        // 4. Standard Vertical Layout with Dynamic Typography
+        let stPt = 20, optPt = 17, spPt = 10;
+        const totalChars = q.question.length + (q.options.A || '').length + (q.options.B || '').length + (q.options.C || '').length + (q.options.D || '').length;
+
+        if (chkFontMaximizer.checked) {
+          if (totalChars > 700) { stPt = 14; optPt = 12.5; spPt = 4; }
+          else if (totalChars > 500) { stPt = 16; optPt = 14.5; spPt = 6; }
+          else if (totalChars > 350) { stPt = 18; optPt = 16; spPt = 8; }
+          else { stPt = 22; optPt = 19; spPt = 12; }
+        }
+
+        const textRuns = [];
+        if (q.section) {
+          textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(11, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
+        }
+        textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
+        textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, breakLine: true } });
+
+        for (let i = 1; i < stemLines.length; i++) {
+          const sub = stemLines[i];
+          const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement');
+          textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, breakLine: true } });
+        }
+
+        textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
+
+        for (const k of ['A', 'B', 'C', 'D']) {
+          textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
+          textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+        }
+
+        slide.addText(textRuns, {
+          x: bLeft,
+          y: bTop,
+          w: bWidth,
+          h: bHeight,
+          wrap: true,
+          valign: 'top'
+        });
       }
 
       const outName = `Quiz_Presentation_${state.parsedQuestions.length}_Slides.pptx`;
       await pptx.writeFile({ fileName: outName });
 
       downloadBanner.classList.remove('hidden');
-      downloadDetails.innerText = `${state.parsedQuestions.length} slides exported directly to your Downloads folder!`;
-      genStatusText.innerText = '✨ Presentation generated successfully!';
+      downloadDetails.innerText = `${state.parsedQuestions.length} slides formatted with smart typography and chalkboard bounds.`;
+      genStatusText.innerText = '✨ Presentation generated and downloaded successfully!';
       downloadBanner.scrollIntoView({ behavior: 'smooth' });
 
     } catch (err) {
