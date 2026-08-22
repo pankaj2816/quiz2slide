@@ -365,26 +365,7 @@ btnParsePdf.addEventListener('click', async () => {
         }
       }
 
-      // Clean Page 1: Filter out general instructions before Section A / Question 1
-      if (pno === 1) {
-        let cleanP1Lines = [];
-        let pastInstructions = false;
-        for (const lineText of pageLines) {
-          if (lineText.includes('Section A:') || (/^(?:Q\.?\s*1|1\.)\s+The majestic/i.test(lineText))) {
-            pastInstructions = true;
-          }
-          if (!pastInstructions) {
-            if (/^(?:Total Questions|Time Allowed|Maximum Marks|General Instructions:?|[1-4]\.\s+(?:This paper|The Test|All questions|Marks are|Each question))/i.test(lineText)) {
-              continue;
-            }
-          }
-          cleanP1Lines.push(lineText);
-        }
-        fullLines.push(...cleanP1Lines);
-      } else {
-        fullLines.push(...pageLines);
-      }
-
+      fullLines.push(...pageLines);
       page.cleanup();
     }
 
@@ -425,6 +406,16 @@ function cleanOptionText(optRaw) {
 }
 
 function parseQuestionsFromTextStream(fullStream) {
+  // CRITICAL FIX: Find the first genuine question stem or standalone Section A header
+  // This completely discards the front matter / instructions lines before Question 1
+  const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+The\s+majestic/i);
+  if (firstQMatch) {
+    fullStream = fullStream.slice(firstQMatch.index);
+  } else {
+    // Fallback: strip general instructions block
+    fullStream = fullStream.replace(/Instructions\s+for\s+students[\s\S]*?Marks\s+are\s+indicated[^\n]*\n+/i, '');
+  }
+
   let questions = [];
   let qNum = 1;
   let currentPos = 0;
