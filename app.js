@@ -320,7 +320,6 @@ btnParsePdf.addEventListener('click', async () => {
         );
         state.pageImages[pno] = cropCanvas.toDataURL('image/png');
         
-        // Clean up canvases immediately
         offCanvas.width = offCanvas.height = cropCanvas.width = cropCanvas.height = 0;
       }
 
@@ -334,7 +333,7 @@ btnParsePdf.addEventListener('click', async () => {
         };
       });
 
-      // Filter marks on right edge and headers/footers
+      // Filter right-edge marks column and headers/footers
       items = items.filter(it => {
         if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str.trim())) return false;
         if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz'))) return false;
@@ -523,7 +522,7 @@ filterInput.addEventListener('input', (e) => {
   });
 });
 
-// High-Performance / Low-Memory Client-Side PowerPoint Generator using PptxGenJS
+// High-Performance Client-Side PowerPoint Generator
 function setupGenerator() {
   btnGeneratePpt.addEventListener('click', async () => {
     if (state.parsedQuestions.length === 0) return;
@@ -549,11 +548,14 @@ function setupGenerator() {
       const colStemHex = colStem.value.replace('#', '');
       const colOptLblHex = colOptLabel.value.replace('#', '');
 
-      // CRITICAL FIX: Define Slide Master ONCE with background image to avoid 96x memory duplication
+      // Define Slide Master ONCE with background image object
       if (state.bgImageBase64) {
         pptx.defineSlideMaster({
           title: "CHALKBOARD_MASTER",
-          background: { data: state.bgImageBase64 }
+          background: { color: "1E4D2B" },
+          objects: [
+            { image: { x: 0, y: 0, w: slideW, h: slideH, data: state.bgImageBase64 } }
+          ]
         });
       }
 
@@ -562,8 +564,8 @@ function setupGenerator() {
       for (let idx = 0; idx < totalQs; idx++) {
         const q = state.parsedQuestions[idx];
 
-        // Yield event loop every 5 slides so browser doesn't freeze or hit OOM limit
-        if (idx % 5 === 0) {
+        // Yield event loop every 4 slides
+        if (idx % 4 === 0) {
           genStatusText.innerText = `Formatting slide ${idx + 1} of ${totalQs}...`;
           await new Promise(resolve => setTimeout(resolve, 0));
         }
@@ -678,7 +680,7 @@ function setupGenerator() {
 
         for (let i = 1; i < stemLines.length; i++) {
           const sub = stemLines[i];
-          const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement');
+          const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
           textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, breakLine: true } });
         }
 
