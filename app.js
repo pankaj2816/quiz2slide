@@ -327,8 +327,11 @@ function formatMathText(str) {
        .replace(/cm2\b/g, 'cm²')
        .replace(/m\/s2\b/g, 'm/s²')
        .replace(/B₂\s*x\s*'/gi, "'x'")
-       .replace(/B₂\s*is\s*:\s*B₁\b|B₂\s*:\s*B₁\b|B₂\s*,\s*B₁\s*is\s*:\b|For\s*x\s*:\s*R\s*=\s*3\s*:\s*4,\s*B₁\s*is\s*:/gi, "For x : R = 3 : 4, B₂/B₁ is:")
-       .replace(/γ\s*A\s*\/\s*γ\s*B\s*=\s*\(\s*1\s*\+\s*1\s*\/\s*n\s*\)/gi, 'γ_A / γ_B = (1 + 1/n)');
+       .replace(/B\s*B₁\s*2\s*is\s*:|B₂\s*is\s*:\s*B₁\b|B₂\s*:\s*B₁\b|B₂\s*,\s*B₁\s*is\s*:\b|For\s*x\s*:\s*R\s*=\s*3\s*:\s*4,\s*B₁\s*is\s*:/gi, "B₂/B₁ is:")
+       .replace(/γ\s*γ\s*A\s*B\s*=\s*\(\s*1\s*\+\s*n\s*1\s*\)/gi, 'γ_A / γ_B = (1 + 1/n)')
+       .replace(/γ\s*A\s*\/\s*γ\s*B\s*=\s*\(\s*1\s*\+\s*1\s*\/\s*n\s*\)/gi, 'γ_A / γ_B = (1 + 1/n)')
+       .replace(/next\s*2\s*3\s*x\s*distance/gi, 'next (3/2)x distance')
+       .replace(/is\s*50\s*7\s*m\/s/gi, 'is 50/7 m/s');
   return s.trim();
 }
 
