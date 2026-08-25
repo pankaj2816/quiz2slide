@@ -474,15 +474,12 @@ function cleanOptionText(optRaw) {
 
 // Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
-  // Check if document has explicit "Q. 1", "Q. 2" or "Question 1"
   const hasExplicitQ = /\bQ(?:uestion)?\.?\s*\d+/i.test(fullStream);
   
   let qPat;
   if (hasExplicitQ) {
-    // Strict Question Pattern: Must have "Q." or "Question" to avoid matching solution steps
     qPat = /(?:(?:^|\n)(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*(\d+))\s*[\.\:\-\s]/gi;
   } else {
-    // Numbered Quiz Pattern: Anchored from first real question
     const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+[A-Z]/i);
     if (firstQMatch) {
       fullStream = fullStream.slice(firstQMatch.index);
@@ -504,7 +501,6 @@ function parseUniversalQuestions(fullStream) {
     const qNumStr = match[1] || match[2] || (i + 1);
     const qNum = parseInt(qNumStr, 10);
 
-    // Look for Subject / Section Header preceding this question
     const preChunk = fullStream.slice(Math.max(0, match.index - 120), match.index);
     const secMatch = preChunk.match(/\b(Physics|Chemistry|Mathematics|Biology|Social\s+Science|Section\s+[A-Z0-9]+:?[^\n]*)\b/i);
     if (secMatch) {
@@ -562,7 +558,7 @@ function parseUniversalQuestions(fullStream) {
   return questions;
 }
 
-// Render Questions List with Image Badges & Thumbnails
+// Render Questions List with Image Badges, Thumbnails & Solutions Accordion
 function renderQuestionsList(questions) {
   questionCountLabel.innerText = `${questions.length} questions ready for export`;
   if (questions.length === 0) {
@@ -580,11 +576,17 @@ function renderQuestionsList(questions) {
       <div class="q-stem" contenteditable="true" data-field="question">${escapeHtml(q.question)}</div>
       ${q.imageData ? `<div class="q-diagram-preview"><img src="${q.imageData}" alt="Question ${q.q_num} Diagram" style="max-width: 320px; border-radius: 6px; margin: 8px 0; border: 1px solid rgba(255,255,255,0.2);"></div>` : ''}
       <div class="q-options">
-        <div class="q-opt"><span>(A)</span> ${escapeHtml(q.options.A || '')}</div>
-        <div class="q-opt"><span>(B)</span> ${escapeHtml(q.options.B || '')}</div>
-        <div class="q-opt"><span>(C)</span> ${escapeHtml(q.options.C || '')}</div>
-        <div class="q-opt"><span>(D)</span> ${escapeHtml(q.options.D || '')}</div>
+        ${q.options.A ? `<div class="q-opt"><span>(A)</span> ${escapeHtml(q.options.A)}</div>` : ''}
+        ${q.options.B ? `<div class="q-opt"><span>(B)</span> ${escapeHtml(q.options.B)}</div>` : ''}
+        ${q.options.C ? `<div class="q-opt"><span>(C)</span> ${escapeHtml(q.options.C)}</div>` : ''}
+        ${q.options.D ? `<div class="q-opt"><span>(D)</span> ${escapeHtml(q.options.D)}</div>` : ''}
       </div>
+      ${q.solution ? `
+        <details class="q-sol-accordion">
+          <summary>💡 View Full Solution & Answer Key</summary>
+          <div class="q-sol-body">${escapeHtml(q.solution)}</div>
+        </details>
+      ` : ''}
     </div>
   `).join('');
 
@@ -601,12 +603,14 @@ filterInput.addEventListener('input', (e) => {
   const items = document.querySelectorAll('.question-item');
   items.forEach((item, idx) => {
     const q = state.parsedQuestions[idx];
-    const match = q.question.toLowerCase().includes(query) || (q.section && q.section.toLowerCase().includes(query));
+    const match = q.question.toLowerCase().includes(query) || 
+                  (q.section && q.section.toLowerCase().includes(query)) ||
+                  (q.solution && q.solution.toLowerCase().includes(query));
     item.style.display = match ? 'block' : 'none';
   });
 });
 
-// High-Performance Client-Side PowerPoint Generator with Directory Prompt
+// High-Performance Client-Side PowerPoint Generator with Directory Prompt & Solution Modes
 function setupGenerator() {
   btnGeneratePpt.addEventListener('click', async () => {
     if (state.parsedQuestions.length === 0) return;
@@ -631,6 +635,8 @@ function setupGenerator() {
       const colQnumHex = colQnum.value.replace('#', '');
       const colStemHex = colStem.value.replace('#', '');
       const colOptLblHex = colOptLabel.value.replace('#', '');
+
+      const solutionMode = document.querySelector('input[name="solutionMode"]:checked')?.value || 'ignore';
 
       // Define Slide Master ONCE with background image object
       if (state.bgImageBase64) {
@@ -700,13 +706,9 @@ function setupGenerator() {
           }
 
           slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
-          continue;
         }
-
         // 2. 2x2 Grid Layout for Short Options
-        const hasAllOpts = q.options.A && q.options.B && q.options.C && q.options.D;
-        const isShortMcq = chk2x2Grid.checked && hasAllOpts && (maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1);
-        if (isShortMcq) {
+        else if (chk2x2Grid.checked && q.options.A && q.options.B && q.options.C && q.options.D && maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1) {
           const qTextRuns = [];
           if (q.section) {
             qTextRuns.push({ text: q.section.toUpperCase(), options: { fontSize: 13, bold: true, color: colSecHex, breakLine: true } });
@@ -743,51 +745,78 @@ function setupGenerator() {
             { text: '(D) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
             { text: q.options.D, options: { fontSize: 21, color: 'F5F5F5' } }
           ], { x: bLeft + colW + 0.5, y: topOpts, w: colW, h: 2.8, wrap: true, valign: 'top' });
-
-          continue;
         }
-
         // 3. Standard Vertical Layout with Dynamic Typography
-        let stPt = 20, optPt = 17, spPt = 10;
-        const totalChars = q.question.length + (q.options.A || '').length + (q.options.B || '').length + (q.options.C || '').length + (q.options.D || '').length;
+        else {
+          let stPt = 20, optPt = 17, spPt = 10;
+          const totalChars = q.question.length + (q.options.A || '').length + (q.options.B || '').length + (q.options.C || '').length + (q.options.D || '').length;
 
-        if (chkFontMaximizer.checked) {
-          if (totalChars > 700) { stPt = 14; optPt = 12.5; spPt = 4; }
-          else if (totalChars > 500) { stPt = 16; optPt = 14.5; spPt = 6; }
-          else if (totalChars > 350) { stPt = 18; optPt = 16; spPt = 8; }
-          else { stPt = 22; optPt = 19; spPt = 12; }
-        }
-
-        const textRuns = [];
-        if (q.section) {
-          textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(11, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
-        }
-        textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
-        textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, breakLine: true } });
-
-        for (let i = 1; i < stemLines.length; i++) {
-          const sub = stemLines[i];
-          const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
-          textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, breakLine: true } });
-        }
-
-        textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
-
-        for (const k of ['A', 'B', 'C', 'D']) {
-          if (q.options[k]) {
-            textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
-            textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+          if (chkFontMaximizer.checked) {
+            if (totalChars > 700) { stPt = 14; optPt = 12.5; spPt = 4; }
+            else if (totalChars > 500) { stPt = 16; optPt = 14.5; spPt = 6; }
+            else if (totalChars > 350) { stPt = 18; optPt = 16; spPt = 8; }
+            else { stPt = 22; optPt = 19; spPt = 12; }
           }
+
+          const textRuns = [];
+          if (q.section) {
+            textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(11, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
+          }
+          textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
+          textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, breakLine: true } });
+
+          for (let i = 1; i < stemLines.length; i++) {
+            const sub = stemLines[i];
+            const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
+            textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, breakLine: true } });
+          }
+
+          textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
+
+          for (const k of ['A', 'B', 'C', 'D']) {
+            if (q.options[k]) {
+              textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
+              textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+            }
+          }
+
+          // If Inline Answer Mode is selected
+          if (solutionMode === 'inline' && q.solution) {
+            const ansLine = q.solution.split('\n')[0] || '';
+            textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: 13, bold: true, color: '81C784' } });
+          }
+
+          slide.addText(textRuns, {
+            x: bLeft,
+            y: bTop,
+            w: bWidth,
+            h: bHeight,
+            wrap: true,
+            valign: 'top'
+          });
         }
 
-        slide.addText(textRuns, {
-          x: bLeft,
-          y: bTop,
-          w: bWidth,
-          h: bHeight,
-          wrap: true,
-          valign: 'top'
-        });
+        // 4. If Separate Solution Slide Mode is selected
+        if (solutionMode === 'separate' && q.solution) {
+          const solSlide = state.bgImageBase64 
+            ? pptx.addSlide({ masterName: "CHALKBOARD_MASTER" })
+            : pptx.addSlide();
+
+          const solRuns = [
+            { text: `💡 SOLUTION & EXPLANATION — Q${q.q_num}`, options: { fontSize: 15, bold: true, color: 'FFD54F', breakLine: true } },
+            { text: `${stemLines[0].slice(0, 100)}${stemLines[0].length > 100 ? '...' : ''}\n\n`, options: { fontSize: 12, italic: true, color: '90CAF9', breakLine: true } },
+            { text: q.solution, options: { fontSize: 14, color: 'F5F5F5', breakLine: true } }
+          ];
+
+          solSlide.addText(solRuns, {
+            x: bLeft,
+            y: bTop,
+            w: bWidth,
+            h: bHeight,
+            wrap: true,
+            valign: 'top'
+          });
+        }
       }
 
       genStatusText.innerText = 'Packaging presentation file...';

@@ -600,3 +600,64 @@ body {
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
+
+/* Solution Mode & Accordion UI */
+.solution-mode-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #e2e8f0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: #3b82f6;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.q-sol-accordion {
+  margin-top: 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+.q-sol-accordion summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #93c5fd;
+  user-select: none;
+}
+
+.q-sol-accordion summary:hover {
+  color: #bfdbfe;
+}
+
+.q-sol-body {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', monospace;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 10px;
+  border-radius: 4px;
+}
