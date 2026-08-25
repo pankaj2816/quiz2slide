@@ -3,7 +3,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 import pptx
 import re
 
-prs = pptx.Presentation(r"d:\Work\kaku\test_output\Quiz_Presentation_30_Slides_Rev87.pptx")
+prs = pptx.Presentation(r"d:\Work\kaku\test_output\Quiz_Presentation_30_Slides_Rev88.pptx")
 
 print("=== CHECKING MULTIPLE SPACES ACROSS ALL SLIDES ===")
 for idx, slide in enumerate(prs.slides, 1):
