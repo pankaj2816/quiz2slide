@@ -380,6 +380,20 @@ function formatMathText(str) {
        .replace(/\s*μ\s*r\b/gi, ' μᵣ')
        .replace(/\s*μ\s*t\b/gi, ' μₜ');
 
+  // Dimensional Formulas (Slide 18)
+  s = s.replace(/\[\s*ML\s*[0₀]?\s*T\s*[−\-]?\s*3\s*\]/gi, '[ML⁰ T⁻³]')
+       .replace(/\[\s*ML\s*[−\-]?\s*2\s*T\s*[−\-]?\s*2\s*\]/gi, '[ML⁻² T⁻²]')
+       .replace(/\[\s*M\s*[−\-]?\s*1\s*LT\s*2\s*\]/gi, '[M⁻¹ L T²]')
+       .replace(/\[\s*ML\s*[−\-]?\s*1\s*T\s*[−\-]?\s*1\s*\]/gi, '[ML⁻¹ T⁻¹]');
+
+  // Ordinals (Slide 30)
+  s = s.replace(/\b1\s+st\b/gi, '1st')
+       .replace(/\b2\s+nd\b/gi, '2nd')
+       .replace(/\b3\s+rd\b/gi, '3rd')
+       .replace(/\b4\s+th\b/gi, '4th')
+       .replace(/\b6\s+th\b/gi, '6th')
+       .replace(/\b8\s+th\b/gi, '8th');
+
   // Precision Whitespace Normalizer
   s = s.replace(/\s+([,.:;?!%°])/g, '$1')
        .replace(/([,;?!])(?=[^\s\d\)])/g, '$1 ')
