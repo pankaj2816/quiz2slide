@@ -79,6 +79,28 @@ body {
   color: var(--text-muted);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  justify-content: flex-end;
+}
+
+.revision-badge {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+
 .status-badge {
   background: rgba(16, 185, 129, 0.15);
   color: var(--success);
@@ -87,6 +109,9 @@ body {
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Cards */
@@ -437,17 +462,17 @@ body {
 
 .font-presets-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 
 .btn-font-preset {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--card-border);
   color: var(--text-main);
-  padding: 7px 4px;
+  padding: 8px 10px;
   border-radius: 6px;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-align: center;
   cursor: pointer;
