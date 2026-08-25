@@ -441,12 +441,12 @@ function cleanOptionText(optRaw) {
        .replace(/χ\s*=\s*μₜ\s*\+\s*1/gi, 'χ = μₜ + 1');
 
   // 3. Photoelectric / Quantum formulas
-  s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[ $1m(hc/λ − ϕ) ] / eB')
-       .replace(/√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[ m(hc/λ − ϕ) ] / eB')
-       .replace(/2\s*√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[ m(hc/λ − ϕ) ] / eB')
-       .replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[ $1m(hc/λ − ϕ) ] / eB')
-       .replace(/2\s*√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[ m(hc/λ − ϕ) ] / eB')
-       .replace(/√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[ m(hc/λ − ϕ) ] / eB');
+  s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[$1m(hc/λ − ϕ)] / eB')
+       .replace(/√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[m(hc/λ − ϕ)] / eB')
+       .replace(/2\s*√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[m(hc/λ − ϕ)] / eB')
+       .replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[$1m(hc/λ − ϕ)] / eB')
+       .replace(/2\s*√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[m(hc/λ − ϕ)] / eB')
+       .replace(/√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[m(hc/λ − ϕ)] / eB');
 
   // 4. Fractions & charges in options
   s = s.replace(/−\s*α\s*2/g, '−α/2')
