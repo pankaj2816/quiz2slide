@@ -380,14 +380,14 @@ function cleanOptionText(optRaw) {
        .replace(/−\s*45\s*∘/g, '−45°')
        .replace(/\+\s*45\s*∘/g, '+45°')
        .replace(/−\s*α/g, '−α')
-       .replace(/3\s*σq\s*2\s*ϵ0/gi, '3σq / 2ϵ₀')
-       .replace(/3\s*σq\s*4\s*ϵ0/gi, '3σq / 4ϵ₀')
-       .replace(/σq\s*4\s*ϵ0/gi, 'σq / 4ϵ₀')
-       .replace(/σq\s*2\s*ϵ0/gi, 'σq / 2ϵ₀')
-       .replace(/3\s*σq\s*\n*\s*2\s*ϵ0/gi, '3σq / 2ϵ₀')
-       .replace(/3\s*σq\s*\n*\s*4\s*ϵ0/gi, '3σq / 4ϵ₀')
-       .replace(/σq\s*\n*\s*4\s*ϵ0/gi, 'σq / 4ϵ₀')
-       .replace(/σq\s*\n*\s*2\s*ϵ0/gi, 'σq / 2ϵ₀');
+       .replace(/3\s*σq\s*2\s*ϵ[0₀]/gi, '3σq / 2ϵ₀')
+       .replace(/3\s*σq\s*4\s*ϵ[0₀]/gi, '3σq / 4ϵ₀')
+       .replace(/σq\s*4\s*ϵ[0₀]/gi, 'σq / 4ϵ₀')
+       .replace(/σq\s*2\s*ϵ[0₀]/gi, 'σq / 2ϵ₀')
+       .replace(/3\s*σq\s*\n*\s*2\s*ϵ[0₀]/gi, '3σq / 2ϵ₀')
+       .replace(/3\s*σq\s*\n*\s*4\s*ϵ[0₀]/gi, '3σq / 4ϵ₀')
+       .replace(/σq\s*\n*\s*4\s*ϵ[0₀]/gi, 'σq / 4ϵ₀')
+       .replace(/σq\s*\n*\s*2\s*ϵ[0₀]/gi, 'σq / 2ϵ₀');
 
   let lines = s.split('\n').map(l => l.trim()).filter(Boolean);
   if (lines.length === 2 && lines[0].length <= 15 && lines[1].length <= 15 && !lines[0].includes('=')) {
