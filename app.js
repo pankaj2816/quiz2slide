@@ -18,7 +18,7 @@ let state = {
   pdfFileName: '',
   bgImageBase64: typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : null,
   parsedQuestions: [],
-  pageImages: {}, // { pageNum: base64Data }
+  questionDiagrams: {}, // { qNum: base64Data }
   lastGeneratedBlob: null,
   bbox: {
     left_ratio: 0.36,
@@ -85,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Setup File Uploads
 function setupFileUploads() {
-  // PDF
   pdfFileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
       const file = e.target.files[0];
@@ -101,7 +100,6 @@ function setupFileUploads() {
     }
   });
 
-  // Custom PPTX or Image Template
   pptFileInput.addEventListener('change', async (e) => {
     if (e.target.files.length > 0) {
       const file = e.target.files[0];
@@ -387,7 +385,7 @@ function cleanOptionText(optRaw) {
   return s;
 }
 
-// Universal Client-Side PDF Parser using PDF.js
+// Universal Client-Side PDF Parser using PDF.js with Dynamic Auto-Diagram Detection
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
@@ -401,39 +399,13 @@ btnParsePdf.addEventListener('click', async () => {
     const numPages = pdfDoc.numPages;
 
     let fullLines = [];
-    state.pageImages = {};
+    state.questionDiagrams = {};
 
     for (let pno = 1; pno <= numPages; pno++) {
       genStatusText.innerText = `Parsing page ${pno} of ${numPages}...`;
       const page = await pdfDoc.getPage(pno);
       const textContent = await page.getTextContent();
       const viewport = page.getViewport({ scale: 2.0 });
-
-      // Crop Q22 Region X / Region Y diagram if present on Page 5
-      if (pno === 5) {
-        let pageTextRaw = textContent.items.map(i => i.str).join(' ');
-        if (pageTextRaw.includes('Region X') || pageTextRaw.includes('Region Y') || pageTextRaw.includes('atmospheric pressure')) {
-          const offCanvas = document.createElement('canvas');
-          offCanvas.width = viewport.width;
-          offCanvas.height = viewport.height;
-          const offCtx = offCanvas.getContext('2d');
-          await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
-
-          const cropCanvas = document.createElement('canvas');
-          const cX = viewport.width * 0.22;
-          const cY = viewport.height * 0.635;
-          const cW = viewport.width * 0.57;
-          const cH = viewport.height * 0.21;
-
-          cropCanvas.width = Math.floor(cW);
-          cropCanvas.height = Math.floor(cH);
-          const cropCtx = cropCanvas.getContext('2d');
-          cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
-          
-          state.pageImages[pno] = cropCanvas.toDataURL('image/png');
-          offCanvas.width = offCanvas.height = 0;
-        }
-      }
 
       let items = textContent.items.map(item => {
         const tx = item.transform;
@@ -453,8 +425,10 @@ btnParsePdf.addEventListener('click', async () => {
         return true;
       });
 
+      // Sort items by vertical position
       items.sort((a, b) => a.y - b.y || a.x - b.x);
 
+      // Group into lines
       let lines = [];
       for (const it of items) {
         let matched = lines.find(l => Math.abs(l.y - it.y) < 4.5);
@@ -464,7 +438,6 @@ btnParsePdf.addEventListener('click', async () => {
           lines.push({ y: it.y, items: [it] });
         }
       }
-
       lines.sort((a, b) => a.y - b.y);
 
       let pageLines = [];
@@ -477,6 +450,54 @@ btnParsePdf.addEventListener('click', async () => {
         }
       }
 
+      // Dynamic Diagram Detection on this Page
+      // Look for Questions that have a vertical gap before Option 1 / (A) or explicit diagram stems
+      for (let i = 0; i < lines.length; i++) {
+        const lineStr = lines[i].items.map(it => it.str).join(' ');
+        const qm = lineStr.match(/\bQ(?:uestion)?\.?\s*(\d+)/i);
+        if (qm) {
+          const qNum = parseInt(qm[1], 10);
+          let stemBottomY = lines[i].y + 15;
+          let optTopY = null;
+
+          // Find where this question stem ends and where options start
+          for (let j = i + 1; j < lines.length; j++) {
+            const nextLineStr = lines[j].items.map(it => it.str).join(' ');
+            if (/^(?:Option\s*[1-4A-D]:|\([A-D1-4]\)|[A-D]\.)/i.test(nextLineStr.trim())) {
+              optTopY = lines[j].y;
+              break;
+            }
+            if (/^Q(?:uestion)?\.?\s*\d+/i.test(nextLineStr.trim()) || /^(?:Solution|Correct Answer):/i.test(nextLineStr.trim())) {
+              break;
+            }
+            stemBottomY = Math.max(stemBottomY, lines[j].y + 12);
+          }
+
+          // If gap between stem bottom and option top is >= 35px, crop diagram!
+          if (optTopY && (optTopY - stemBottomY >= 35)) {
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = viewport.width;
+            offCanvas.height = viewport.height;
+            const offCtx = offCanvas.getContext('2d');
+            await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
+
+            const cropCanvas = document.createElement('canvas');
+            const cX = viewport.width * 0.10;
+            const cY = (stemBottomY + 2) * 2.0; // scale factor
+            const cW = viewport.width * 0.80;
+            const cH = Math.max(40, (optTopY - stemBottomY - 4) * 2.0);
+
+            cropCanvas.width = Math.floor(cW);
+            cropCanvas.height = Math.floor(cH);
+            const cropCtx = cropCanvas.getContext('2d');
+            cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
+
+            state.questionDiagrams[qNum] = cropCanvas.toDataURL('image/png');
+            offCanvas.width = offCanvas.height = 0;
+          }
+        }
+      }
+
       fullLines.push(...pageLines);
       page.cleanup();
     }
@@ -484,10 +505,10 @@ btnParsePdf.addEventListener('click', async () => {
     const fullStream = fullLines.join('\n');
     state.parsedQuestions = parseUniversalQuestions(fullStream);
 
-    // Attach Q22 diagram if present
+    // Attach all detected question diagrams (e.g. Q4 lens diagram, Q3 wheel, Q5 plates, Q22, etc.)
     for (const q of state.parsedQuestions) {
-      if (q.q_num === 22 && state.pageImages[5]) {
-        q.imageData = state.pageImages[5];
+      if (state.questionDiagrams[q.q_num]) {
+        q.imageData = state.questionDiagrams[q.q_num];
       }
     }
 
@@ -610,7 +631,7 @@ function renderQuestionsList(questions) {
         ${q.imageData ? '<span class="badge-diagram">🖼️ Diagram Attached</span>' : ''}
       </div>
       <div class="q-stem" contenteditable="true" data-field="question">${escapeHtml(q.question)}</div>
-      ${q.imageData ? `<div class="q-diagram-preview"><img src="${q.imageData}" alt="Question ${q.q_num} Diagram" style="max-width: 320px; border-radius: 6px; margin: 8px 0; border: 1px solid rgba(255,255,255,0.2);"></div>` : ''}
+      ${q.imageData ? `<div class="q-diagram-preview"><img src="${q.imageData}" alt="Question ${q.q_num} Diagram" style="max-width: 340px; border-radius: 6px; margin: 8px 0; border: 1px solid rgba(255,255,255,0.2);"></div>` : ''}
       <div class="q-options">
         ${q.options.A ? `<div class="q-opt"><span>(A)</span> ${escapeHtml(q.options.A)}</div>` : ''}
         ${q.options.B ? `<div class="q-opt"><span>(B)</span> ${escapeHtml(q.options.B)}</div>` : ''}
@@ -708,7 +729,7 @@ function setupGenerator() {
           (q.options.D || '').length
         );
 
-        // 1. Question with Diagram (e.g. Q22 or Geometry figures)
+        // 1. Question with Diagram (e.g. Q4 lens diagram, Q3 wheel, Q5 plates, Q22 pressure)
         if (q.imageData) {
           const topH = 1.1;
           const textRunsTop = [];
@@ -720,8 +741,8 @@ function setupGenerator() {
 
           slide.addText(textRunsTop, { x: bLeft, y: bTop, w: bWidth, h: topH, wrap: true, valign: 'top' });
 
-          const diagW = 3.6;
-          const diagH = 1.85;
+          const diagW = 3.8;
+          const diagH = 1.95;
           const diagL = bLeft + (bWidth - diagW) / 2;
           const diagT = bTop + topH + 0.05;
           slide.addImage({ data: q.imageData, x: diagL, y: diagT, w: diagW, h: diagH });
@@ -739,6 +760,12 @@ function setupGenerator() {
               textRunsBot.push({ text: `(${k}) `, options: { fontSize: 12, bold: true, color: colOptLblHex } });
               textRunsBot.push({ text: q.options[k] || '', options: { fontSize: 12, color: 'F5F5F5', breakLine: true } });
             }
+          }
+
+          // If Inline Answer Mode is selected
+          if (solutionMode === 'inline' && q.solution) {
+            const ansLine = q.solution.split('\n')[0] || '';
+            textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: 11.5, bold: true, color: '81C784' } });
           }
 
           slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
