@@ -290,7 +290,7 @@ function setupPresets() {
   });
 }
 
-// Math Formula and Symbol Formatter for Stems and Solutions
+// Math & Chemistry Formula Formatter for Question Stems
 function formatMathText(str) {
   if (!str) return '';
   let s = str;
@@ -308,36 +308,43 @@ function formatMathText(str) {
        .replace(/ ∘/g, '°')
        .replace(/\bdeg\b/g, '°')
        .replace(/\binfty\b/gi, '∞')
-       .replace(/(\d+)\s*\*\s*10\^([-\d]+)/g, (m, c, exp) => `${c} × 10${exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join('')}`)
-       .replace(/\s+/g, ' ')
        .replace(/\s+([,.:;?!])/g, '$1')
-       .replace(/ϵ0\b/g, 'ϵ₀')
-       .replace(/μ0\b/g, 'μ₀')
-       .replace(/μr\b/g, 'μᵣ')
-       .replace(/μt\b/g, 'μₜ');
+       .replace(/([A-Z][a-z]?)\s+(\d+)\b/g, (m, elem, num) => elem + num.split('').map(d => SUBSCRIPT_MAP[d] || d).join(''))
+       .replace(/([a-zA-Z\d\)])\^([-\d]+)/g, (m, base, exp) => base + exp.split('').map(d => SUPERSCRIPT_MAP[d] || d).join(''))
+       .replace(/\s*ϵ\s*0\b/gi, ' ϵ₀')
+       .replace(/\s*μ\s*0\b/gi, ' μ₀')
+       .replace(/\s*μ\s*r\b/gi, ' μᵣ')
+       .replace(/\s*μ\s*t\b/gi, ' μₜ');
   return s.trim();
 }
 
-// High-Precision Option Cleaner with Mathematical Fraction & Trig Reconstruction
+// High-Precision Option Cleaner with Exact Mathematical Fraction & Function Reconstruction
 function cleanOptionText(optRaw) {
   if (!optRaw) return '';
   const lines = optRaw.split('\n').map(l => l.trim()).filter(l => l && !isHeaderOrFooter(l));
   let s = lines.join('\n');
 
-  // 1. Reconstruct trigonometric inverse fractions: cos-1 ( 1 / √3 ), etc.
-  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹($1 / $2)');
-  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1 / $2)');
-  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹($1 / $2)');
-  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1 / $2)');
-  s = s.replace(/cos\s*[-−]\s*1/gi, 'cos⁻¹');
-  s = s.replace(/sin\s*[-−]\s*1/gi, 'sin⁻¹');
-  s = s.replace(/tan\s*[-−]\s*1/gi, 'tan⁻¹');
+  // 1. Reconstruct trigonometric inverse fractions: cos-1 ( 1 / √3 ), cos^-1(2/3), etc.
+  s = s.replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*(\d+)\s*\)\s*\/\s*([^\s\)]+)/gi, 'cos⁻¹($1/$2)')
+       .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*√\s*(\d+)\s*\)\s*\/\s*([^\s\)]+)/gi, 'cos⁻¹(√$1/$2)')
+       .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
+       .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)')
+       .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
+       .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)')
+       .replace(/cos\s*[-−]\s*1/gi, 'cos⁻¹')
+       .replace(/sin\s*[-−]\s*1/gi, 'sin⁻¹')
+       .replace(/tan\s*[-−]\s*1/gi, 'tan⁻¹');
 
-  // 2. Reconstruct vertical fraction blocks in options (e.g. "σq\n4ϵ0", "3σq\n2ϵ0", "μ\nμ0 − 1")
-  s = s.replace(/(?:χ\s*=\s*)?μ\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = μ/μ₀ $1');
-  s = s.replace(/(?:χ\s*=\s*)?μr\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = μᵣ/μ₀ $1');
-  s = s.replace(/(?:χ\s*=\s*)?1\s*([−\-+])\s*μ\s*\n+\s*μ0/gi, 'χ = 1 $1 μ/μ₀');
+  // 2. Reconstruct susceptibility relations: χ = μ/μ0 − 1
+  s = s.replace(/μ\s*χ\s*=\s*μ\s*0\s*([−\-+]\s*1)/gi, 'χ = (μ/μ₀) $1')
+       .replace(/μ\s*χ\s*=\s*r\s*\+\s*1\s*μ\s*0/gi, 'χ = (μᵣ/μ₀) + 1')
+       .replace(/μ\s*χ\s*=\s*1\s*[-−]\s*μ\s*0/gi, 'χ = 1 − (μ/μ₀)')
+       .replace(/χ\s*=\s*μ\s*t\s*\+\s*1/gi, 'χ = μₜ + 1')
+       .replace(/(?:χ\s*=\s*)?μ\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = (μ/μ₀) $1')
+       .replace(/(?:χ\s*=\s*)?μr\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = (μᵣ/μ₀) + 1')
+       .replace(/(?:χ\s*=\s*)?1\s*([−\-+])\s*μ\s*\n+\s*μ0/gi, 'χ = 1 $1 (μ/μ₀)');
 
+  // 3. Reconstruct vertical fraction blocks in options (e.g. "σq\n4ϵ0", "3σq\n2ϵ0", "− α\n2")
   let optLines = s.split('\n').map(l => l.trim()).filter(Boolean);
   if (optLines.length === 2) {
     if (optLines[0].length <= 15 && optLines[1].length <= 15 && !optLines[0].includes('=') && !optLines[1].includes('=')) {
@@ -349,17 +356,20 @@ function cleanOptionText(optRaw) {
     s = optLines.join(' ');
   }
 
-  // 3. Reconstruct optical / quantum formulas: √2 m ( hc / λ − ϕ ) / eB
-  s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s+([^\s\)]+)\s*[-−]\s*ϕ\s*\)\s*\/eB/gi, '√$1m (hc/$2 − ϕ) / eB');
-  s = s.replace(/√\s*m\s*\(\s*hc\s+([^\s\)]+)\s*[-−]\s*ϕ\s*\)\s*\/eB/gi, '√m (hc/$1 − ϕ) / eB');
-  s = s.replace(/2\s*√\s*m\s*\(\s*hc\s+([^\s\)]+)\s*[-−]\s*ϕ\s*\)\s*\/eB/gi, '2√m (hc/$1 − ϕ) / eB');
+  // 4. Reconstruct optical / quantum formulas: √2 m ( hc / λ − ϕ ) / eB
+  s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ $1m(hc/λ − ϕ) ] / eB')
+       .replace(/√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ m(hc/λ − ϕ) ] / eB')
+       .replace(/2\s*√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '2√[ m(hc/λ − ϕ) ] / eB');
 
-  // 4. Standardize punctuation & operators
-  s = s.replace(/\s+/g, ' ')
-       .replace(/\(\s+/g, '(')
-       .replace(/\s+\)/g, ')')
-       .replace(/\[\s+/g, '[')
-       .replace(/\s+\]/g, ']')
+  // 5. Clean up units, coordinates, and spacing
+  s = s.replace(/\s*ϵ\s*0\b/gi, ' ϵ₀')
+       .replace(/\s*μ\s*0\b/gi, ' μ₀')
+       .replace(/\s*μ\s*r\b/gi, ' μᵣ')
+       .replace(/\s*μ\s*t\b/gi, ' μₜ')
+       .replace(/\(\s*(\d+)\s*d\s*\/\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, '($1d/$2, $3, $4)')
+       .replace(/\(\s*d\s*\/\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, '(d/$1, $2, $3)')
+       .replace(/rad\s*\/\s*s/g, 'rad/s')
+       .replace(/nC\s*\/\s*m\s*2/g, 'nC/m²')
        .replace(/([0-9a-zA-Z])\s*\/\s*([0-9a-zA-Z])/g, '$1 / $2')
        .replace(/,\s*/g, ', ')
        .replace(/;\s*/g, '; ')
@@ -371,19 +381,8 @@ function cleanOptionText(optRaw) {
        .replace(/ ∘C|∘C| ∘ C/g, '°C')
        .replace(/ ∘/g, '°')
        .replace(/\bdeg\b/g, '°')
+       .replace(/\s+/g, ' ')
        .trim();
-
-  // 5. Scientific notations
-  s = s.replace(/ϵ0\b/g, 'ϵ₀')
-       .replace(/μ0\b/g, 'μ₀')
-       .replace(/μr\b/g, 'μᵣ')
-       .replace(/μt\b/g, 'μₜ')
-       .replace(/10\s*[-−]\s*(\d+)\b/g, '10⁻$1')
-       .replace(/h[-−]1\b/g, 'h⁻¹')
-       .replace(/ms[-−]2\b/g, 'ms⁻²')
-       .replace(/m\/s2\b/g, 'm/s²')
-       .replace(/cm2\b/g, 'cm²')
-       .replace(/m2\b/g, 'm²');
 
   return s;
 }
@@ -471,17 +470,7 @@ btnParsePdf.addEventListener('click', async () => {
       let pageLines = [];
       for (const l of lines) {
         l.items.sort((a, b) => a.x - b.x);
-        let lineText = "";
-        for (const it of l.items) {
-          const w = it.str;
-          if (!lineText) {
-            lineText = w;
-          } else if ([',', '.', ':', ';', '?', '!', '%', '°', '°C'].includes(w)) {
-            lineText += w;
-          } else {
-            lineText += " " + w;
-          }
-        }
+        let lineText = l.items.map(i => i.str).join(' ').trim();
         lineText = formatMathText(lineText);
         if (lineText && !isHeaderOrFooter(lineText)) {
           pageLines.push(lineText);
