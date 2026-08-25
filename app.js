@@ -361,9 +361,10 @@ function cleanOptionText(optRaw) {
        .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)');
 
   // 2. Susceptibility relations
-  s = s.replace(/χ\s*=\s*μ\s*μ0\s*[-−]\s*1/gi, 'χ = (μ/μ₀) − 1')
-       .replace(/χ\s*=\s*μr\s*μ0\s*\+\s*1/gi, 'χ = (μᵣ/μ₀) + 1')
-       .replace(/χ\s*=\s*1\s*[-−]\s*μ\s*μ0/gi, 'χ = 1 − (μ/μ₀)')
+  s = s.replace(/χ\s*=\s*μ\s*μ[0₀]\s*[-−]\s*1/gi, 'χ = (μ/μ₀) − 1')
+       .replace(/χ\s*=\s*μ\s*μ[0₀]\s*r\s*\+\s*1/gi, 'χ = (μᵣ/μ₀) + 1')
+       .replace(/χ\s*=\s*μr\s*μ[0₀]\s*\+\s*1/gi, 'χ = (μᵣ/μ₀) + 1')
+       .replace(/χ\s*=\s*1\s*[-−]\s*μ\s*μ[0₀]/gi, 'χ = 1 − (μ/μ₀)')
        .replace(/(?:μ\s*\/\s*χ|μ\s*χ)\s*=\s*μ₀\s*([−\-+]\s*1)/gi, 'χ = (μ/μ₀) $1')
        .replace(/(?:μ\s*\/\s*χ|μ\s*χ)\s*=\s*r\s*\+\s*1\s*μ₀/gi, 'χ = (μᵣ/μ₀) + 1')
        .replace(/(?:μ\s*\/\s*χ|μ\s*χ)\s*=\s*1\s*[-−]\s*μ₀/gi, 'χ = 1 − (μ/μ₀)')
