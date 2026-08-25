@@ -9,7 +9,7 @@ const SUPERSCRIPT_MAP = {
 
 const SUBSCRIPT_MAP = {
   '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
-  'r': 'ᵣ', 't': 'ₜ', 'L': 'ₗ', '0': '₀'
+  'r': 'ᵣ', 't': 'ₜ', 'L': 'ₗ', '0': '₀', 'A': 'ᴀ', 'B': 'ʙ'
 };
 
 const DIAGRAM_STEM_PAT = /\b(?:shown\s+(?:in|as|below|in\s+the\s+diagram|in\s+figure|in\s+the\s+figure)|as\s+shown\s+(?:in\s+the\s+diagram|in\s+figure|in\s+the\s+figure|below)|given\s+(?:in\s+)?(?:diagram|figure)|diagram\s+below|figure\s+below)\b/i;
@@ -323,7 +323,9 @@ function formatMathText(str) {
        .replace(/Nm[−\-]2\b/g, 'Nm⁻²')
        .replace(/ms[−\-]2\b/g, 'ms⁻²')
        .replace(/cm2\b/g, 'cm²')
-       .replace(/m\/s2\b/g, 'm/s²');
+       .replace(/m\/s2\b/g, 'm/s²')
+       .replace(/B₂\s*x\s*'|'\s*x\s*'\s*from\s*the\s*center\.\s*For\s*x\s*:\s*R\s*=\s*3\s*:\s*4,\s*B₂\s*is\s*:\s*B₁/gi, "'x' from the center. For x : R = 3 : 4, B₂/B₁ is:")
+       .replace(/γ\s*A\s*\/\s*γ\s*B\s*=\s*\(\s*1\s*\+\s*1\s*\/\s*n\s*\)/gi, 'γ_A / γ_B = (1 + 1/n)');
   return s.trim();
 }
 
@@ -359,18 +361,31 @@ function cleanOptionText(optRaw) {
        .replace(/(?:χ\s*=\s*)?μr\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = (μᵣ/μ₀) + 1')
        .replace(/(?:χ\s*=\s*)?1\s*([−\-+])\s*μ\s*\n+\s*μ0/gi, 'χ = 1 $1 (μ/μ₀)');
 
-  // 3. Reconstruct vertical fraction blocks in options
+  // 3. Reconstruct optical / quantum formulas:
+  s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ $1m(hc/λ − ϕ) ] / eB')
+       .replace(/√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ m(hc/λ − ϕ) ] / eB')
+       .replace(/2\s*√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '2√[ m(hc/λ − ϕ) ] / eB')
+       .replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[ $1m(hc/λ − ϕ) ] / eB')
+       .replace(/2\s*√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[ m(hc/λ − ϕ) ] / eB')
+       .replace(/√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[ m(hc/λ − ϕ) ] / eB');
+
+  // 4. Reconstruct vertical fraction blocks in options (e.g. Q4 angles, Q5 charges)
+  s = s.replace(/−α\s*\n*\s*2/g, '−α/2')
+       .replace(/−\s*α\s*\/\s*2/g, '−α/2')
+       .replace(/−\s*45\s*∘/g, '−45°')
+       .replace(/\+\s*45\s*∘/g, '+45°')
+       .replace(/−\s*α/g, '−α')
+       .replace(/3\s*σq\s*\n*\s*2\s*ϵ0/g, '3σq / 2ϵ₀')
+       .replace(/3\s*σq\s*\n*\s*4\s*ϵ0/g, '3σq / 4ϵ₀')
+       .replace(/σq\s*\n*\s*4\s*ϵ0/g, 'σq / 4ϵ₀')
+       .replace(/σq\s*\n*\s*2\s*ϵ0/g, 'σq / 2ϵ₀');
+
   let optLines = s.split('\n').map(l => l.trim()).filter(Boolean);
   if (optLines.length === 2 && optLines[0].length <= 15 && optLines[1].length <= 15 && !optLines[0].includes('=')) {
     s = `${optLines[0]} / ${optLines[1]}`;
   } else if (optLines.length > 1) {
     s = optLines.join(' ');
   }
-
-  // 4. Reconstruct optical / quantum formulas:
-  s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ $1m(hc/λ − ϕ) ] / eB')
-       .replace(/√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ m(hc/λ − ϕ) ] / eB')
-       .replace(/2\s*√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '2√[ m(hc/λ − ϕ) ] / eB');
 
   // 5. Clean up units, coordinates, and spacing
   s = s.replace(/\s*ϵ\s*0\b/gi, ' ϵ₀')
@@ -607,7 +622,7 @@ function isHeaderOrFooter(text) {
 // Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
   // Strictly match Q. 1, Q. 2, ...
-  const qPat = /(?:(?:^|\n)(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*(\d+))\s*[\.\:\-\s]/gi;
+  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?\s*Q(?:uestion)?\.?\s*(\d+)\b/gi;
 
   let matches = [];
   let m;
