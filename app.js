@@ -12,6 +12,8 @@ const SUBSCRIPT_MAP = {
   'r': 'ᵣ', 't': 'ₜ', 'L': 'ₗ', '0': '₀'
 };
 
+const DIAGRAM_STEM_PAT = /\b(?:shown\s+(?:in|as|below|in\s+the\s+diagram|in\s+figure|in\s+the\s+figure)|as\s+shown\s+(?:in\s+the\s+diagram|in\s+figure|in\s+the\s+figure|below)|given\s+(?:in\s+)?(?:diagram|figure)|diagram\s+below|figure\s+below)\b/i;
+
 // Application State
 let state = {
   pdfArrayBuffer: null,
@@ -55,6 +57,7 @@ const inputHeight = document.getElementById('inputHeight');
 
 const chkFontMaximizer = document.getElementById('chkFontMaximizer');
 const chk2x2Grid = document.getElementById('chk2x2Grid');
+const chkAutoDiagrams = document.getElementById('chkAutoDiagrams');
 const colSection = document.getElementById('colSection');
 const colQnum = document.getElementById('colQnum');
 const colStem = document.getElementById('colStem');
@@ -319,12 +322,14 @@ function formatMathText(str) {
 // High-Precision Option Cleaner with Exact Mathematical Fraction & Function Reconstruction
 function cleanOptionText(optRaw) {
   if (!optRaw) return '';
-  const lines = optRaw.split('\n').map(l => l.trim()).filter(l => l && !isHeaderOrFooter(l));
-  let s = lines.join('\n');
+  let s = optRaw;
 
-  // 1. Reconstruct trigonometric inverse fractions: cos-1 ( 1 / √3 ), cos^-1(2/3), etc.
-  s = s.replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*(\d+)\s*\)\s*\/\s*([^\s\)]+)/gi, 'cos⁻¹($1/$2)')
-       .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*√\s*(\d+)\s*\)\s*\/\s*([^\s\)]+)/gi, 'cos⁻¹(√$1/$2)')
+  // Clean extra spaces inside parentheses first
+  s = s.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+
+  // 1. Reconstruct trigonometric inverse fractions:
+  s = s.replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*(\d+)\s*\)\s*(?:\/|\s+)\s*([^\s\)]+)/gi, 'cos⁻¹($1/$2)')
+       .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*√\s*(\d+)\s*\)\s*(?:\/|\s+)\s*([^\s\)]+)/gi, 'cos⁻¹(√$1/$2)')
        .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
        .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)')
        .replace(/cos(?:⁻¹|\s*[-−]?\s*1)\s*\(\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
@@ -333,7 +338,7 @@ function cleanOptionText(optRaw) {
        .replace(/sin\s*[-−]\s*1/gi, 'sin⁻¹')
        .replace(/tan\s*[-−]\s*1/gi, 'tan⁻¹');
 
-  // 2. Reconstruct susceptibility relations: χ = μ/μ0 − 1
+  // 2. Reconstruct susceptibility relations:
   s = s.replace(/μ\s*χ\s*=\s*μ\s*0\s*([−\-+]\s*1)/gi, 'χ = (μ/μ₀) $1')
        .replace(/μ\s*χ\s*=\s*r\s*\+\s*1\s*μ\s*0/gi, 'χ = (μᵣ/μ₀) + 1')
        .replace(/μ\s*χ\s*=\s*1\s*[-−]\s*μ\s*0/gi, 'χ = 1 − (μ/μ₀)')
@@ -342,19 +347,15 @@ function cleanOptionText(optRaw) {
        .replace(/(?:χ\s*=\s*)?μr\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = (μᵣ/μ₀) + 1')
        .replace(/(?:χ\s*=\s*)?1\s*([−\-+])\s*μ\s*\n+\s*μ0/gi, 'χ = 1 $1 (μ/μ₀)');
 
-  // 3. Reconstruct vertical fraction blocks in options (e.g. "σq\n4ϵ0", "3σq\n2ϵ0", "− α\n2")
+  // 3. Reconstruct vertical fraction blocks in options
   let optLines = s.split('\n').map(l => l.trim()).filter(Boolean);
-  if (optLines.length === 2) {
-    if (optLines[0].length <= 15 && optLines[1].length <= 15 && !optLines[0].includes('=') && !optLines[1].includes('=')) {
-      s = `${optLines[0]} / ${optLines[1]}`;
-    } else {
-      s = optLines.join(' ');
-    }
-  } else if (optLines.length > 2) {
+  if (optLines.length === 2 && optLines[0].length <= 15 && optLines[1].length <= 15 && !optLines[0].includes('=')) {
+    s = `${optLines[0]} / ${optLines[1]}`;
+  } else if (optLines.length > 1) {
     s = optLines.join(' ');
   }
 
-  // 4. Reconstruct optical / quantum formulas: √2 m ( hc / λ − ϕ ) / eB
+  // 4. Reconstruct optical / quantum formulas:
   s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ $1m(hc/λ − ϕ) ] / eB')
        .replace(/√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '√[ m(hc/λ − ϕ) ] / eB')
        .replace(/2\s*√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ/gi, '2√[ m(hc/λ − ϕ) ] / eB');
@@ -368,24 +369,13 @@ function cleanOptionText(optRaw) {
        .replace(/\(\s*d\s*\/\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, '(d/$1, $2, $3)')
        .replace(/rad\s*\/\s*s/g, 'rad/s')
        .replace(/nC\s*\/\s*m\s*2/g, 'nC/m²')
-       .replace(/([0-9a-zA-Z])\s*\/\s*([0-9a-zA-Z])/g, '$1 / $2')
-       .replace(/,\s*/g, ', ')
-       .replace(/;\s*/g, '; ')
-       .replace(/\+-/g, '±')
-       .replace(/<=/g, '≤')
-       .replace(/>=/g, '≥')
-       .replace(/!=/g, '≠')
-       .replace(/-->|->/g, '→')
-       .replace(/ ∘C|∘C| ∘ C/g, '°C')
-       .replace(/ ∘/g, '°')
-       .replace(/\bdeg\b/g, '°')
        .replace(/\s+/g, ' ')
        .trim();
 
   return s;
 }
 
-// Universal Client-Side PDF Parser using PDF.js with Dynamic Auto-Diagram Detection
+// Universal Client-Side PDF Parser using PDF.js with Strict Guarded Diagram Detection
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
@@ -425,10 +415,8 @@ btnParsePdf.addEventListener('click', async () => {
         return true;
       });
 
-      // Sort items by vertical position
       items.sort((a, b) => a.y - b.y || a.x - b.x);
 
-      // Group into lines
       let lines = [];
       for (const it of items) {
         let matched = lines.find(l => Math.abs(l.y - it.y) < 4.5);
@@ -450,50 +438,53 @@ btnParsePdf.addEventListener('click', async () => {
         }
       }
 
-      // Dynamic Diagram Detection on this Page
-      // Look for Questions that have a vertical gap before Option 1 / (A) or explicit diagram stems
-      for (let i = 0; i < lines.length; i++) {
-        const lineStr = lines[i].items.map(it => it.str).join(' ');
-        const qm = lineStr.match(/\bQ(?:uestion)?\.?\s*(\d+)/i);
-        if (qm) {
-          const qNum = parseInt(qm[1], 10);
-          let stemBottomY = lines[i].y + 15;
-          let optTopY = null;
+      // Strict Guarded Diagram Detection on this Page:
+      // ONLY crop if chkAutoDiagrams is checked AND the question stem explicitly says "shown in figure / diagram"
+      if (chkAutoDiagrams.checked) {
+        for (let i = 0; i < lines.length; i++) {
+          const lineStr = lines[i].items.map(it => it.str).join(' ');
+          const qm = lineStr.match(/\bQ(?:uestion)?\.?\s*(\d+)/i);
+          if (qm) {
+            const qNum = parseInt(qm[1], 10);
+            let fullStemText = lineStr;
+            let stemBottomY = lines[i].y + 15;
+            let optTopY = null;
 
-          // Find where this question stem ends and where options start
-          for (let j = i + 1; j < lines.length; j++) {
-            const nextLineStr = lines[j].items.map(it => it.str).join(' ');
-            if (/^(?:Option\s*[1-4A-D]:|\([A-D1-4]\)|[A-D]\.)/i.test(nextLineStr.trim())) {
-              optTopY = lines[j].y;
-              break;
+            for (let j = i + 1; j < lines.length; j++) {
+              const nextLineStr = lines[j].items.map(it => it.str).join(' ');
+              if (/^(?:Option\s*[1-4A-D]:|\([A-D1-4]\)|[A-D]\.)/i.test(nextLineStr.trim())) {
+                optTopY = lines[j].y;
+                break;
+              }
+              if (/^Q(?:uestion)?\.?\s*\d+/i.test(nextLineStr.trim()) || /^(?:Solution|Correct Answer):/i.test(nextLineStr.trim())) {
+                break;
+              }
+              fullStemText += " " + nextLineStr;
+              stemBottomY = Math.max(stemBottomY, lines[j].y + 12);
             }
-            if (/^Q(?:uestion)?\.?\s*\d+/i.test(nextLineStr.trim()) || /^(?:Solution|Correct Answer):/i.test(nextLineStr.trim())) {
-              break;
+
+            // ONLY extract if stem contains explicit diagram keyword AND has sufficient gap!
+            if (DIAGRAM_STEM_PAT.test(fullStemText) && optTopY && (optTopY - stemBottomY >= 40)) {
+              const offCanvas = document.createElement('canvas');
+              offCanvas.width = viewport.width;
+              offCanvas.height = viewport.height;
+              const offCtx = offCanvas.getContext('2d');
+              await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
+
+              const cropCanvas = document.createElement('canvas');
+              const cX = viewport.width * 0.10;
+              const cY = (stemBottomY + 2) * 2.0;
+              const cW = viewport.width * 0.80;
+              const cH = Math.max(40, (optTopY - stemBottomY - 4) * 2.0);
+
+              cropCanvas.width = Math.floor(cW);
+              cropCanvas.height = Math.floor(cH);
+              const cropCtx = cropCanvas.getContext('2d');
+              cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
+
+              state.questionDiagrams[qNum] = cropCanvas.toDataURL('image/png');
+              offCanvas.width = offCanvas.height = 0;
             }
-            stemBottomY = Math.max(stemBottomY, lines[j].y + 12);
-          }
-
-          // If gap between stem bottom and option top is >= 35px, crop diagram!
-          if (optTopY && (optTopY - stemBottomY >= 35)) {
-            const offCanvas = document.createElement('canvas');
-            offCanvas.width = viewport.width;
-            offCanvas.height = viewport.height;
-            const offCtx = offCanvas.getContext('2d');
-            await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
-
-            const cropCanvas = document.createElement('canvas');
-            const cX = viewport.width * 0.10;
-            const cY = (stemBottomY + 2) * 2.0; // scale factor
-            const cW = viewport.width * 0.80;
-            const cH = Math.max(40, (optTopY - stemBottomY - 4) * 2.0);
-
-            cropCanvas.width = Math.floor(cW);
-            cropCanvas.height = Math.floor(cH);
-            const cropCtx = cropCanvas.getContext('2d');
-            cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
-
-            state.questionDiagrams[qNum] = cropCanvas.toDataURL('image/png');
-            offCanvas.width = offCanvas.height = 0;
           }
         }
       }
@@ -505,7 +496,7 @@ btnParsePdf.addEventListener('click', async () => {
     const fullStream = fullLines.join('\n');
     state.parsedQuestions = parseUniversalQuestions(fullStream);
 
-    // Attach all detected question diagrams (e.g. Q4 lens diagram, Q3 wheel, Q5 plates, Q22, etc.)
+    // Attach genuine question diagrams (e.g. Q4 lens, Q5 plates, Q13 lamina, Q17 surface, Q19 bob)
     for (const q of state.parsedQuestions) {
       if (state.questionDiagrams[q.q_num]) {
         q.imageData = state.questionDiagrams[q.q_num];
@@ -615,7 +606,15 @@ function parseUniversalQuestions(fullStream) {
   return questions;
 }
 
-// Render Questions List with Image Badges, Thumbnails & Solutions Accordion
+// Remove Diagram on a Question
+window.removeDiagram = function(idx) {
+  if (state.parsedQuestions[idx]) {
+    state.parsedQuestions[idx].imageData = null;
+    renderQuestionsList(state.parsedQuestions);
+  }
+};
+
+// Render Questions List with Image Badges, Remove Button & Thumbnails
 function renderQuestionsList(questions) {
   questionCountLabel.innerText = `${questions.length} questions ready for export`;
   if (questions.length === 0) {
@@ -628,7 +627,7 @@ function renderQuestionsList(questions) {
       <div class="q-header">
         <span class="q-badge">Q${q.q_num}</span>
         <span class="q-sec">${q.section || 'General'}</span>
-        ${q.imageData ? '<span class="badge-diagram">🖼️ Diagram Attached</span>' : ''}
+        ${q.imageData ? `<span class="badge-diagram">🖼️ Diagram Attached <button class="btn-remove-diag" onclick="removeDiagram(${idx})">❌ Remove</button></span>` : ''}
       </div>
       <div class="q-stem" contenteditable="true" data-field="question">${escapeHtml(q.question)}</div>
       ${q.imageData ? `<div class="q-diagram-preview"><img src="${q.imageData}" alt="Question ${q.q_num} Diagram" style="max-width: 340px; border-radius: 6px; margin: 8px 0; border: 1px solid rgba(255,255,255,0.2);"></div>` : ''}
@@ -729,7 +728,7 @@ function setupGenerator() {
           (q.options.D || '').length
         );
 
-        // 1. Question with Diagram (e.g. Q4 lens diagram, Q3 wheel, Q5 plates, Q22 pressure)
+        // 1. Question with Genuine Diagram (e.g. Q4 lens, Q5 plates, Q13 lamina, Q17 surface, Q19 bob)
         if (q.imageData) {
           const topH = 1.1;
           const textRunsTop = [];
