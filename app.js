@@ -454,14 +454,15 @@ btnParsePdf.addEventListener('click', async () => {
       for (const l of lines) {
         l.items.sort((a, b) => a.x - b.x);
         
-        // Merge fraction stacks overlapping horizontally (e.g. numerator 'a' at y=626 above denominator 'V2' at y=636)
+        // Merge fraction stacks overlapping horizontally, with STRICT keyword guard
         let mergedTokens = [];
         let i = 0;
         while (i < l.items.length) {
           const w = l.items[i];
           if (i + 1 < l.items.length) {
             const wNext = l.items[i + 1];
-            if (Math.abs(w.x - wNext.x) <= 8.0 && Math.abs(w.y - wNext.y) >= 3.5) {
+            const isKeyword = [w.str, wNext.str].some(s => s.startsWith('Option') || s.startsWith('Q.') || s.startsWith('Correct') || s.startsWith('Solution') || s.startsWith('Hence'));
+            if (!isKeyword && Math.abs(w.x - wNext.x) <= 8.0 && Math.abs(w.y - wNext.y) >= 3.5) {
               const topW = w.y < wNext.y ? w : wNext;
               const botW = w.y < wNext.y ? wNext : w;
               const fracStr = `${topW.str}/${botW.str}`;
@@ -605,18 +606,8 @@ function isHeaderOrFooter(text) {
 
 // Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
-  const hasExplicitQ = /\bQ(?:uestion)?\.?\s*\d+/i.test(fullStream);
-  
-  let qPat;
-  if (hasExplicitQ) {
-    qPat = /(?:(?:^|\n)(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*(\d+))\s*[\.\:\-\s]/gi;
-  } else {
-    const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+[A-Z]/i);
-    if (firstQMatch) {
-      fullStream = fullStream.slice(firstQMatch.index);
-    }
-    qPat = /(?:(?:^|\n)(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*(\d+)|\b(\d+)\.)\s+/gi;
-  }
+  // Strictly match Q. 1, Q. 2, ...
+  const qPat = /(?:(?:^|\n)(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*(\d+))\s*[\.\:\-\s]/gi;
 
   let matches = [];
   let m;
@@ -629,7 +620,7 @@ function parseUniversalQuestions(fullStream) {
 
   for (let i = 0; i < matches.length; i++) {
     const match = matches[i];
-    const qNumStr = match[1] || match[2] || (i + 1);
+    const qNumStr = match[1] || (i + 1);
     const qNum = parseInt(qNumStr, 10);
 
     const preChunk = fullStream.slice(Math.max(0, match.index - 120), match.index);
@@ -641,6 +632,9 @@ function parseUniversalQuestions(fullStream) {
     const startIdx = match.index + match[0].length;
     const endIdx = (i + 1 < matches.length) ? matches[i + 1].index : fullStream.length;
     let rawChunk = fullStream.slice(startIdx, endIdx).trim();
+
+    // Skip small solution snippet artifacts
+    if (rawChunk.length < 15) continue;
 
     // Isolate Question & Options from "Correct Answer:" and "Solution:"
     const solMatch = rawChunk.match(/\n\s*(?:Correct\s+Answer:|Solution:|Ans(?:wer)?:)/i);
