@@ -313,13 +313,13 @@ function formatMathText(str) {
        .replace(/\binfty\b/gi, '∞')
        .replace(/\bsqrt\b/gi, '√')
        .replace(/(\d+)\s*\*\s*10\^([-\d]+)/g, (m, c, exp) => `${c} × 10${exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join('')}`)
-       .replace(/\^([0-9nixy\+-]+)/g, (m, exp) => exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join(''))
+       .replace(/\^([0-9nixya-e\+-]+)/g, (m, exp) => exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join(''))
        .replace(/\s+/g, ' ')
        .replace(/\s+([,.:;?!])/g, '$1');
   return s.trim();
 }
 
-// Memory-Efficient Client-Side PDF Parser using PDF.js with Math Formula Baseline Extraction
+// Universal Client-Side PDF Parser using PDF.js
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
@@ -341,30 +341,33 @@ btnParsePdf.addEventListener('click', async () => {
       const textContent = await page.getTextContent();
       const viewport = page.getViewport({ scale: 2.0 });
 
-      // Crop Q22 Region X / Region Y diagram on Page 5
+      // Crop Q22 Region X / Region Y diagram if present on Page 5
       if (pno === 5) {
-        const offCanvas = document.createElement('canvas');
-        offCanvas.width = viewport.width;
-        offCanvas.height = viewport.height;
-        const offCtx = offCanvas.getContext('2d');
-        await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
+        let pageTextRaw = textContent.items.map(i => i.str).join(' ');
+        if (pageTextRaw.includes('Region X') || pageTextRaw.includes('Region Y') || pageTextRaw.includes('atmospheric pressure')) {
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = viewport.width;
+          offCanvas.height = viewport.height;
+          const offCtx = offCanvas.getContext('2d');
+          await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
 
-        const cropCanvas = document.createElement('canvas');
-        const cX = viewport.width * 0.22;
-        const cY = viewport.height * 0.635;
-        const cW = viewport.width * 0.57;
-        const cH = viewport.height * 0.21;
+          const cropCanvas = document.createElement('canvas');
+          const cX = viewport.width * 0.22;
+          const cY = viewport.height * 0.635;
+          const cW = viewport.width * 0.57;
+          const cH = viewport.height * 0.21;
 
-        cropCanvas.width = Math.floor(cW);
-        cropCanvas.height = Math.floor(cH);
-        const cropCtx = cropCanvas.getContext('2d');
-        cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
-        
-        state.pageImages[pno] = cropCanvas.toDataURL('image/png');
-        offCanvas.width = offCanvas.height = 0;
+          cropCanvas.width = Math.floor(cW);
+          cropCanvas.height = Math.floor(cH);
+          const cropCtx = cropCanvas.getContext('2d');
+          cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
+          
+          state.pageImages[pno] = cropCanvas.toDataURL('image/png');
+          offCanvas.width = offCanvas.height = 0;
+        }
       }
 
-      // Calculate average font size on page for math baseline/superscript detection
+      // Calculate average font size for math superscript detection
       let validHeights = textContent.items.map(it => it.height || (it.transform ? Math.abs(it.transform[3]) : 10)).filter(h => h > 4);
       let avgPageHeight = validHeights.length > 0 ? (validHeights.reduce((a, b) => a + b, 0) / validHeights.length) : 10;
 
@@ -374,10 +377,8 @@ btnParsePdf.addEventListener('click', async () => {
         const itemH = item.height || Math.abs(tx[3]) || 10;
         const yTop = (viewport.height / 2.0) - (tx[5] / 2.0);
 
-        // Math Superscript & Subscript baseline detection
         let transformed = rawText;
         if (itemH < avgPageHeight * 0.85 && rawText.length <= 6) {
-          // If characters are alphanumeric/operators, convert to superscript/subscript
           if (/^[0-9nixya-e\+-=]+$/.test(rawText)) {
             transformed = rawText.split('').map(c => SUPERSCRIPT_MAP[c] || c).join('');
           }
@@ -391,11 +392,11 @@ btnParsePdf.addEventListener('click', async () => {
         };
       });
 
-      // Filter right-edge marks column and headers/footers
+      // Filter right-edge marks column and standard headers/footers
       items = items.filter(it => {
         if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str.trim())) return false;
-        if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz'))) return false;
-        if (it.y > ((viewport.height / 2.0) - 45) && it.str.toLowerCase().includes('page')) return false;
+        if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz') || it.str.toLowerCase().includes('careers360'))) return false;
+        if (it.y > ((viewport.height / 2.0) - 45) && (it.str.toLowerCase().includes('page') || /^\d+$/.test(it.str.trim()))) return false;
         return true;
       });
 
@@ -440,12 +441,12 @@ btnParsePdf.addEventListener('click', async () => {
     }
 
     const fullStream = fullLines.join('\n');
-    state.parsedQuestions = parseQuestionsFromTextStream(fullStream);
+    state.parsedQuestions = parseUniversalQuestions(fullStream);
 
-    // Attach Q22 diagram
+    // Attach Q22 diagram if present
     for (const q of state.parsedQuestions) {
-      if (q.q_num === 22) {
-        q.imageData = state.pageImages[5] || Object.values(state.pageImages)[0];
+      if (q.q_num === 22 && state.pageImages[5]) {
+        q.imageData = state.pageImages[5];
       }
     }
 
@@ -463,7 +464,7 @@ btnParsePdf.addEventListener('click', async () => {
 
 function isHeaderOrFooter(text) {
   const l = text.toLowerCase();
-  return l.includes('7th cbse') || l.includes('page ') || l.includes('maximum marks') || l.includes('general instructions') || l.includes('subject:');
+  return l.includes('7th cbse') || l.includes('careers360') || (l.includes('page ') && l.length < 15) || l.includes('maximum marks') || l.includes('general instructions') || l.includes('subject:');
 }
 
 function cleanOptionText(optRaw) {
@@ -471,52 +472,67 @@ function cleanOptionText(optRaw) {
   return formatMathText(lines.join(' '));
 }
 
-function parseQuestionsFromTextStream(fullStream) {
-  // CRITICAL FIX: Anchor to the first genuine question stem or standalone Section A header
-  const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+[A-Z]/i);
-  if (firstQMatch) {
-    fullStream = fullStream.slice(firstQMatch.index);
+// Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
+function parseUniversalQuestions(fullStream) {
+  // Check if document has explicit "Q. 1", "Q. 2" or "Question 1"
+  const hasExplicitQ = /\bQ(?:uestion)?\.?\s*\d+/i.test(fullStream);
+  
+  let qPat;
+  if (hasExplicitQ) {
+    // Strict Question Pattern: Must have "Q." or "Question" to avoid matching solution steps
+    qPat = /(?:(?:^|\n)(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*(\d+))\s*[\.\:\-\s]/gi;
   } else {
-    fullStream = fullStream.replace(/Instructions\s+for\s+students[\s\S]*?Marks\s+are\s+indicated[^\n]*\n+/i, '');
+    // Numbered Quiz Pattern: Anchored from first real question
+    const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+[A-Z]/i);
+    if (firstQMatch) {
+      fullStream = fullStream.slice(firstQMatch.index);
+    }
+    qPat = /(?:(?:^|\n)(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*(\d+)|\b(\d+)\.)\s+/gi;
+  }
+
+  let matches = [];
+  let m;
+  while ((m = qPat.exec(fullStream)) !== null) {
+    matches.push(m);
   }
 
   let questions = [];
-  let qNum = 1;
-  let currentPos = 0;
-  let currentSection = '';
+  let currentSection = 'General';
 
-  while (qNum <= 300) {
-    const patCurr = new RegExp(`(?:(Section\\s+[A-Z0-9]+:\\s+[^\\n]+)\\s*\\n+)?(?:^|\\n)\\s*(?:Q(?:uestion)?\\.?\\s*${qNum}|\\b${qNum})\\.\\s*`, 'im');
-    const matchCurr = patCurr.exec(fullStream.slice(currentPos));
-    if (!matchCurr) break;
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const qNumStr = match[1] || match[2] || (i + 1);
+    const qNum = parseInt(qNumStr, 10);
 
-    if (matchCurr[1]) {
-      currentSection = formatMathText(matchCurr[1]);
+    // Look for Subject / Section Header preceding this question
+    const preChunk = fullStream.slice(Math.max(0, match.index - 120), match.index);
+    const secMatch = preChunk.match(/\b(Physics|Chemistry|Mathematics|Biology|Social\s+Science|Section\s+[A-Z0-9]+:?[^\n]*)\b/i);
+    if (secMatch) {
+      currentSection = secMatch[1].trim();
     }
 
-    const qStart = currentPos + matchCurr.index + matchCurr[0].length;
-    const patNext = new RegExp(`(?:(Section\\s+[A-Z0-9]+:\\s+[^\\n]+)\\s*\\n+)?(?:^|\\n)\\s*(?:Q(?:uestion)?\\.?\\s*${qNum + 1}|\\b${qNum + 1})\\.\\s*`, 'im');
-    const matchNext = patNext.exec(fullStream.slice(qStart));
+    const startIdx = match.index + match[0].length;
+    const endIdx = (i + 1 < matches.length) ? matches[i + 1].index : fullStream.length;
+    let rawChunk = fullStream.slice(startIdx, endIdx).trim();
 
-    let qEnd = fullStream.length;
-    if (matchNext) {
-      qEnd = qStart + matchNext.index;
-      currentPos = qStart;
-    } else {
-      currentPos = fullStream.length;
+    // Isolate Question & Options from "Correct Answer:" and "Solution:"
+    const solMatch = rawChunk.match(/\n\s*(?:Correct\s+Answer:|Solution:|Ans(?:wer)?:)/i);
+    let qaChunk = rawChunk;
+    let solChunk = "";
+    if (solMatch) {
+      qaChunk = rawChunk.slice(0, solMatch.index).trim();
+      solChunk = rawChunk.slice(solMatch.index).trim();
     }
 
-    let rawBlock = fullStream.slice(qStart, qEnd).trim();
-    rawBlock = rawBlock.replace(/(?<=[.:;?!])\s*\(\s*([A-D])\s*\)\s*/g, '\n($1) ');
-
-    const optRegex = /(?:^|\s)(?:\(\s*([A-Da-d])\s*\)|([A-Da-d])[\.\)])\s+/g;
+    // Parse Options: Supports "Option 1:" ... "Option 4:", "(A)" ... "(D)", "(1)" ... "(4)"
+    const optPat = /(?:^|\n)\s*(?:Option\s*([1-4A-Da-d])\s*:|\(\s*([A-Da-d1-4])\s*\)|([A-Da-d])[\.\)])\s+/gi;
     let optMatches = [];
-    let m;
-    while ((m = optRegex.exec(rawBlock)) !== null) {
-      optMatches.push(m);
+    let om;
+    while ((om = optPat.exec(qaChunk)) !== null) {
+      optMatches.push(om);
     }
 
-    let stem = rawBlock;
+    let stem = qaChunk;
     let optA = '', optB = '', optC = '', optD = '';
 
     if (optMatches.length >= 4) {
@@ -525,34 +541,22 @@ function parseQuestionsFromTextStream(fullStream) {
       const mC = optMatches[optMatches.length - 2];
       const mD = optMatches[optMatches.length - 1];
 
-      stem = rawBlock.slice(0, mA.index).trim();
-      optA = cleanOptionText(rawBlock.slice(mA.index + mA[0].length, mB.index));
-      optB = cleanOptionText(rawBlock.slice(mB.index + mB[0].length, mC.index));
-      optC = cleanOptionText(rawBlock.slice(mC.index + mC[0].length, mD.index));
-      optD = cleanOptionText(rawBlock.slice(mD.index + mD[0].length));
+      stem = qaChunk.slice(0, mA.index).trim();
+      optA = cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index));
+      optB = cleanOptionText(qaChunk.slice(mB.index + mB[0].length, mC.index));
+      optC = cleanOptionText(qaChunk.slice(mC.index + mC[0].length, mD.index));
+      optD = cleanOptionText(qaChunk.slice(mD.index + mD[0].length));
     }
 
     let stemLines = stem.split('\n').map(l => formatMathText(l)).filter(l => l && !isHeaderOrFooter(l));
-    const optCombined = `${optA} ${optB} ${optC} ${optD}`.toLowerCase();
-    if (optCombined.includes('1 and 2') || optCombined.includes('statement 1') || optCombined.includes('pair')) {
-      let counter = 1;
-      stemLines = stemLines.map(sl => {
-        const sm = sl.match(/^(?:\(\s*([A-D])\s*\)|([A-D])\.)\s*(.*)/i);
-        if (sm) {
-          return `${counter++}. ${sm[3] || sm[2]}`;
-        }
-        return sl;
-      });
-    }
 
     questions.push({
       q_num: qNum,
       section: currentSection,
       question: stemLines.join('\n'),
-      options: { A: optA, B: optB, C: optC, D: optD }
+      options: { A: optA, B: optB, C: optC, D: optD },
+      solution: solChunk
     });
-
-    qNum++;
   }
 
   return questions;
@@ -662,7 +666,7 @@ function setupGenerator() {
           (q.options.D || '').length
         );
 
-        // 1. Question with Diagram (e.g. Q22 or Geometry/Math figures)
+        // 1. Question with Diagram (e.g. Q22 or Geometry figures)
         if (q.imageData) {
           const topH = 1.1;
           const textRunsTop = [];
@@ -689,8 +693,10 @@ function setupGenerator() {
           }
 
           for (const k of ['A', 'B', 'C', 'D']) {
-            textRunsBot.push({ text: `(${k}) `, options: { fontSize: 12, bold: true, color: colOptLblHex } });
-            textRunsBot.push({ text: q.options[k] || '', options: { fontSize: 12, color: 'F5F5F5', breakLine: true } });
+            if (q.options[k]) {
+              textRunsBot.push({ text: `(${k}) `, options: { fontSize: 12, bold: true, color: colOptLblHex } });
+              textRunsBot.push({ text: q.options[k] || '', options: { fontSize: 12, color: 'F5F5F5', breakLine: true } });
+            }
           }
 
           slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
@@ -698,7 +704,8 @@ function setupGenerator() {
         }
 
         // 2. 2x2 Grid Layout for Short Options
-        const isShortMcq = chk2x2Grid.checked && (maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1);
+        const hasAllOpts = q.options.A && q.options.B && q.options.C && q.options.D;
+        const isShortMcq = chk2x2Grid.checked && hasAllOpts && (maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1);
         if (isShortMcq) {
           const qTextRuns = [];
           if (q.section) {
@@ -767,8 +774,10 @@ function setupGenerator() {
         textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
 
         for (const k of ['A', 'B', 'C', 'D']) {
-          textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
-          textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+          if (q.options[k]) {
+            textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
+            textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+          }
         }
 
         slide.addText(textRuns, {
@@ -827,7 +836,7 @@ function setupGenerator() {
   });
 
   btnDownloadAgain.addEventListener('click', async () => {
-    const outName = `Quiz_Presentation_${state.parsedQuestions.length || 96}_Slides.pptx`;
+    const outName = `Quiz_Presentation_${state.parsedQuestions.length || 30}_Slides.pptx`;
     if (state.lastGeneratedBlob) {
       if ('showSaveFilePicker' in window) {
         try {
