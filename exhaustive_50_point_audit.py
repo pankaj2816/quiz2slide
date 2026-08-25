@@ -102,8 +102,8 @@ def run_50_point_audit(pptx_path):
             failures.append((15, "Unformatted Area/Volume Unit (cm 2, m 3)", re.findall(r'\b(?:cm|m)\s*2\b|\bm\s*3\b', slide_text)))
 
         # 16. Charge Density Units
-        if re.search(r'\bnC\s*/\s*m\s*2\b|\b\+?\d+\s+μ\s*C\b', slide_text):
-            failures.append((16, "Unformatted Charge Density Unit (nC/m 2)", re.findall(r'\bnC\s*/\s*m\s*2\b|\b\+?\d+\s+μ\s*C\b', slide_text)))
+        if re.search(r'\bnC\s*/\s*m\s*2\b|\bμ\s+C\b', slide_text):
+            failures.append((16, "Unformatted Charge Density Unit (nC/m 2)", re.findall(r'\bnC\s*/\s*m\s*2\b|\bμ\s+C\b', slide_text)))
 
         # 17. Permittivity & Field Units
         if re.search(r'\bm\s*F\b|\bm\s*F\s*/\s*m\b', slide_text):
