@@ -316,7 +316,9 @@ function formatMathText(str) {
        .replace(/\s*μ\s*0\b/gi, ' μ₀')
        .replace(/\s*μ\s*r\b/gi, ' μᵣ')
        .replace(/\s*μ\s*t\b/gi, ' μₜ')
-       .replace(/ab[−\-]2\b/g, 'ab⁻²')
+       .replace(/ab\s*[−\-]\s*2\b/g, 'ab⁻²')
+       .replace(/\(P\s*\+\s*V\s*a\s*2\s*\)/g, '(P + a/V²)')
+       .replace(/\(P\s*\+\s*a\s*\/\s*V2\s*\)/g, '(P + a/V²)')
        .replace(/C4H9Br\b/g, 'C₄H₉Br')
        .replace(/NaNH2\b/g, 'NaNH₂')
        .replace(/kg\/m3\b/g, 'kg/m³')
@@ -373,19 +375,19 @@ function cleanOptionText(optRaw) {
        .replace(/√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[ m(hc/λ − ϕ) ] / eB');
 
   // 4. Fractions & charges in options
-  s = s.replace(/−α\s*2/g, '−α/2')
+  s = s.replace(/−\s*α\s*2/g, '−α/2')
        .replace(/−\s*α\s*\/\s*2/g, '−α/2')
        .replace(/−\s*45\s*∘/g, '−45°')
        .replace(/\+\s*45\s*∘/g, '+45°')
        .replace(/−\s*α/g, '−α')
-       .replace(/3σq\s*2ϵ0/g, '3σq / 2ϵ₀')
-       .replace(/3σq\s*4ϵ0/g, '3σq / 4ϵ₀')
-       .replace(/σq\s*4ϵ0/g, 'σq / 4ϵ₀')
-       .replace(/σq\s*2ϵ0/g, 'σq / 2ϵ₀')
-       .replace(/3\s*σq\s*\n*\s*2\s*ϵ0/g, '3σq / 2ϵ₀')
-       .replace(/3\s*σq\s*\n*\s*4\s*ϵ0/g, '3σq / 4ϵ₀')
-       .replace(/σq\s*\n*\s*4\s*ϵ0/g, 'σq / 4ϵ₀')
-       .replace(/σq\s*\n*\s*2\s*ϵ0/g, 'σq / 2ϵ₀');
+       .replace(/3\s*σq\s*2\s*ϵ0/gi, '3σq / 2ϵ₀')
+       .replace(/3\s*σq\s*4\s*ϵ0/gi, '3σq / 4ϵ₀')
+       .replace(/σq\s*4\s*ϵ0/gi, 'σq / 4ϵ₀')
+       .replace(/σq\s*2\s*ϵ0/gi, 'σq / 2ϵ₀')
+       .replace(/3\s*σq\s*\n*\s*2\s*ϵ0/gi, '3σq / 2ϵ₀')
+       .replace(/3\s*σq\s*\n*\s*4\s*ϵ0/gi, '3σq / 4ϵ₀')
+       .replace(/σq\s*\n*\s*4\s*ϵ0/gi, 'σq / 4ϵ₀')
+       .replace(/σq\s*\n*\s*2\s*ϵ0/gi, 'σq / 2ϵ₀');
 
   let lines = s.split('\n').map(l => l.trim()).filter(Boolean);
   if (lines.length === 2 && lines[0].length <= 15 && lines[1].length <= 15 && !lines[0].includes('=')) {
@@ -404,6 +406,7 @@ function cleanOptionText(optRaw) {
        .replace(/rad\s*\/\s*s/g, 'rad/s')
        .replace(/nC\s*\/\s*m\s*2/g, 'nC/m²')
        .replace(/\s+/g, ' ')
+       .replace(/\)\s*\)+$/g, ')')
        .trim();
 
   return s;
@@ -664,6 +667,7 @@ function parseUniversalQuestions(fullStream) {
       '(P + a/V²)(V − b) = RT, where P, V, T and R are the pressure, volume, temperature and gas constant, respectively. The dimension of ab⁻² is')
       .replace(/\(P\s*\+\s*a\/V2\s*\)/g, '(P + a/V²)')
       .replace(/\(P\s*\+\s*a\/V²\s*\)/g, '(P + a/V²)')
+      .replace(/\(P\s*\+\s*V\s*a\s*2\s*\)/g, '(P + a/V²)')
       .replace(/\(V\s*[−\-]\s*b\s*\)/g, '(V − b)')
       .replace(/ab[−\-]2\b/g, 'ab⁻²');
 
