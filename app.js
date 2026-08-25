@@ -681,6 +681,31 @@ function isHeaderOrFooter(text) {
   return l.includes('7th cbse') || l.includes('careers360') || (l.includes('page ') && l.length < 15) || l.includes('maximum marks') || l.includes('general instructions') || l.includes('subject:');
 }
 
+// Smart Paragraph Reflower: Merges broken PDF line wraps into natural flowing sentences
+function reflowStemParagraphs(stemText) {
+  if (!stemText) return '';
+  const lines = stemText.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length <= 1) return stemText;
+
+  let result = [];
+  let currentPara = lines[0];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const isSpecialItem = /^(?:\([A-Da-d1-4I-Vixv]+\)|[1-4]\.|\•|Statement\s+[I|V|X\d]+|Assertion|Reason|List-[I|V\d]+|Column\s+[I|V\d]+|Choose\s+the\s+correct)/i.test(line);
+    const prevEndsColon = /:\s*$/.test(currentPara);
+
+    if (isSpecialItem || prevEndsColon) {
+      result.push(currentPara);
+      currentPara = line;
+    } else {
+      currentPara += " " + line;
+    }
+  }
+  result.push(currentPara);
+  return result.join('\n');
+}
+
 // Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
   // Strictly match uppercase Q. 1, Q. 2, ...
@@ -755,11 +780,12 @@ function parseUniversalQuestions(fullStream) {
       .replace(/ab[−\-]2\b/g, 'ab⁻²');
 
     let stemLines = stem.split('\n').map(l => formatMathText(l)).filter(l => l && !isHeaderOrFooter(l));
+    const reflowedStem = reflowStemParagraphs(stemLines.join('\n'));
 
     questions.push({
       q_num: qNum,
       section: currentSection,
-      question: stemLines.join('\n'),
+      question: reflowedStem,
       options: { A: optA, B: optB, C: optC, D: optD },
       solution: solChunk
     });
