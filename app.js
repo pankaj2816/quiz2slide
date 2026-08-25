@@ -324,7 +324,7 @@ function formatMathText(str) {
        .replace(/ms[−\-]2\b/g, 'ms⁻²')
        .replace(/cm2\b/g, 'cm²')
        .replace(/m\/s2\b/g, 'm/s²')
-       .replace(/B₂\s*x\s*'|'\s*x\s*'\s*from\s*the\s*center\.\s*For\s*x\s*:\s*R\s*=\s*3\s*:\s*4,\s*B₂\s*is\s*:\s*B₁/gi, "'x' from the center. For x : R = 3 : 4, B₂/B₁ is:")
+       .replace(/B₂\s*is\s*:\s*B₁\b|B₂\s*:\s*B₁\b/gi, 'B₂/B₁ is:')
        .replace(/γ\s*A\s*\/\s*γ\s*B\s*=\s*\(\s*1\s*\+\s*1\s*\/\s*n\s*\)/gi, 'γ_A / γ_B = (1 + 1/n)');
   return s.trim();
 }
@@ -532,7 +532,7 @@ btnParsePdf.addEventListener('click', async () => {
       if (chkAutoDiagrams.checked) {
         for (let i = 0; i < lines.length; i++) {
           const lineStr = lines[i].items.map(it => it.str).join(' ');
-          const qm = lineStr.match(/\bQ(?:uestion)?\.?\s*(\d+)/i);
+          const qm = lineStr.match(/(?:^|\s)Q(?:uestion)?\.?\s*(\d+)\b/);
           if (qm) {
             const qNum = parseInt(qm[1], 10);
             let fullStemText = lineStr;
@@ -589,13 +589,14 @@ btnParsePdf.addEventListener('click', async () => {
     }
 
     const fullStream = fullLines.join('\n');
+    window._lastFullStream = fullStream;
     state.parsedQuestions = parseUniversalQuestions(fullStream);
 
     // Section-aware diagram linking
     for (const q of state.parsedQuestions) {
       const match = state.questionDiagrams.find(d => 
         d.qNum === q.q_num && 
-        (d.section.toLowerCase() === q.section.toLowerCase() || q.question.includes(d.snippet.slice(10, 30)))
+        (d.section.toLowerCase() === q.section.toLowerCase() || d.pno > 0)
       );
       if (match) {
         q.imageData = match.dataUrl;
@@ -621,8 +622,8 @@ function isHeaderOrFooter(text) {
 
 // Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
-  // Strictly match Q. 1, Q. 2, ...
-  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?\s*Q(?:uestion)?\.?\s*(\d+)\b/gi;
+  // Strictly match uppercase Q. 1, Q. 2, ...
+  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?\s*(?:Q\.?\s*|Question\s*)(\d+)\b/g;
 
   let matches = [];
   let m;
@@ -631,7 +632,7 @@ function parseUniversalQuestions(fullStream) {
   }
 
   let questions = [];
-  let currentSection = 'General';
+  let currentSection = 'Physics';
 
   for (let i = 0; i < matches.length; i++) {
     const match = matches[i];
