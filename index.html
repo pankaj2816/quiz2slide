@@ -139,11 +139,35 @@
             </div>
           </div>
 
+          <h3 class="mt-4">🔠 Smart Global Word &amp; Font Size</h3>
+          <div class="font-scale-box">
+            <div class="font-presets-row">
+              <button type="button" class="btn-font-preset" data-scale="85">Compact (18pt)</button>
+              <button type="button" class="btn-font-preset active" data-scale="100">Standard (22pt)</button>
+              <button type="button" class="btn-font-preset" data-scale="120">Large (26pt)</button>
+              <button type="button" class="btn-font-preset" data-scale="140">Jumbo (30pt)</button>
+            </div>
+            
+            <div class="font-slider-wrap">
+              <div class="font-slider-info">
+                <span>Global Multiplier:</span>
+                <span class="font-scale-badge" id="fontScaleDisplay">100% (Standard)</span>
+              </div>
+              <input type="range" id="inputFontScale" min="75" max="160" step="5" value="100" class="font-slider">
+              <div class="font-slider-labels">
+                <span>75% (Small)</span>
+                <span>100% (Normal)</span>
+                <span>125% (Big)</span>
+                <span>160% (Huge)</span>
+              </div>
+            </div>
+          </div>
+
           <h3 class="mt-4">Smart Layout Settings</h3>
           <div class="toggle-group">
             <label class="toggle-label">
               <input type="checkbox" id="chkFontMaximizer" checked>
-              <span>Dynamic Font Maximizer (14pt - 26pt auto-fill)</span>
+              <span>Dynamic Font Maximizer (auto-balance long questions)</span>
             </label>
             <label class="toggle-label">
               <input type="checkbox" id="chk2x2Grid" checked>

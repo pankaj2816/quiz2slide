@@ -55,6 +55,10 @@ const inputTop = document.getElementById('inputTop');
 const inputWidth = document.getElementById('inputWidth');
 const inputHeight = document.getElementById('inputHeight');
 
+const inputFontScale = document.getElementById('inputFontScale');
+const fontScaleDisplay = document.getElementById('fontScaleDisplay');
+const btnFontPresets = document.querySelectorAll('.btn-font-preset');
+
 const chkFontMaximizer = document.getElementById('chkFontMaximizer');
 const chk2x2Grid = document.getElementById('chk2x2Grid');
 const chkAutoDiagrams = document.getElementById('chkAutoDiagrams');
@@ -82,9 +86,41 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCanvasSelection();
   setupPresets();
   setupCoordInputs();
+  setupFontScalingControls();
   setupGenerator();
   loadDefaultTemplatePreview();
 });
+
+// Setup Smart Global Font Scaling Controls
+function setupFontScalingControls() {
+  if (!inputFontScale || !fontScaleDisplay) return;
+
+  function updateFontScaleUI(scaleVal) {
+    inputFontScale.value = scaleVal;
+    let label = `${scaleVal}%`;
+    if (scaleVal <= 88) label += " (Compact)";
+    else if (scaleVal <= 108) label += " (Standard)";
+    else if (scaleVal <= 128) label += " (Large)";
+    else label += " (Jumbo)";
+    fontScaleDisplay.innerText = label;
+
+    btnFontPresets.forEach(btn => {
+      const bScale = parseInt(btn.dataset.scale, 10);
+      btn.classList.toggle('active', Math.abs(bScale - scaleVal) < 8);
+    });
+  }
+
+  inputFontScale.addEventListener('input', (e) => {
+    updateFontScaleUI(parseInt(e.target.value, 10));
+  });
+
+  btnFontPresets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const scaleVal = parseInt(btn.dataset.scale, 10);
+      updateFontScaleUI(scaleVal);
+    });
+  });
+}
 
 // Setup File Uploads
 function setupFileUploads() {
@@ -881,6 +917,7 @@ function setupGenerator() {
       const colOptLblHex = colOptLabel.value.replace('#', '');
 
       const solutionMode = document.querySelector('input[name="solutionMode"]:checked')?.value || 'ignore';
+      const fontScaleFactor = (parseFloat(inputFontScale ? inputFontScale.value : 100) || 100) / 100;
 
       // Define Slide Master ONCE with background image object
       if (state.bgImageBase64) {
@@ -918,13 +955,15 @@ function setupGenerator() {
 
         // 1. Question with Genuine Diagram (e.g. Q4 lens, Q5 plates, Q13 lamina, Q17 surface, Q19 bob)
         if (q.imageData) {
-          const topH = 1.1;
+          const topH = Math.min(1.4, 1.1 * fontScaleFactor);
+          const topStPt = Math.max(11, Math.round(14 * fontScaleFactor));
+          const topQPt = Math.max(13, Math.round(17 * fontScaleFactor));
           const textRunsTop = [];
           if (q.section) {
-            textRunsTop.push({ text: q.section.toUpperCase(), options: { fontSize: 11.5, bold: true, color: colSecHex, breakLine: true } });
+            textRunsTop.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10, Math.round(11.5 * fontScaleFactor)), bold: true, color: colSecHex, breakLine: true } });
           }
-          textRunsTop.push({ text: `Q${q.q_num}. `, options: { fontSize: 17, bold: true, color: colQnumHex } });
-          textRunsTop.push({ text: stemLines[0], options: { fontSize: 14, bold: true, color: colStemHex, breakLine: true } });
+          textRunsTop.push({ text: `Q${q.q_num}. `, options: { fontSize: topQPt, bold: true, color: colQnumHex } });
+          textRunsTop.push({ text: stemLines[0], options: { fontSize: topStPt, bold: true, color: colStemHex, breakLine: true } });
 
           slide.addText(textRunsTop, { x: bLeft, y: bTop, w: bWidth, h: topH, wrap: true, valign: 'top' });
 
@@ -938,79 +977,107 @@ function setupGenerator() {
           const botH = (bTop + bHeight) - botT;
           const textRunsBot = [];
 
+          const botStPt = Math.max(10.5, Math.round(12.5 * fontScaleFactor));
+          const botOptPt = Math.max(10, Math.round(12 * fontScaleFactor));
+
           if (stemLines.length > 1) {
-            textRunsBot.push({ text: stemLines.slice(1).join('\n'), options: { fontSize: 12.5, bold: true, color: colStemHex, breakLine: true } });
+            textRunsBot.push({ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex, breakLine: true } });
           }
 
           for (const k of ['A', 'B', 'C', 'D']) {
             if (q.options[k]) {
-              textRunsBot.push({ text: `(${k}) `, options: { fontSize: 12, bold: true, color: colOptLblHex } });
-              textRunsBot.push({ text: q.options[k] || '', options: { fontSize: 12, color: 'F5F5F5', breakLine: true } });
+              textRunsBot.push({ text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex } });
+              textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: 'F5F5F5', breakLine: true } });
             }
           }
 
           // If Inline Answer Mode is selected
           if (solutionMode === 'inline' && q.solution) {
             const ansLine = q.solution.split('\n')[0] || '';
-            textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: 11.5, bold: true, color: '81C784' } });
+            textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: '81C784' } });
           }
 
           slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
         }
         // 2. 2x2 Grid Layout for Short Options
         else if (chk2x2Grid.checked && q.options.A && q.options.B && q.options.C && q.options.D && maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1) {
+          const gStPt = Math.round(23 * fontScaleFactor);
+          const gQPt = Math.round(26 * fontScaleFactor);
+          const gOptPt = Math.round(21 * fontScaleFactor);
+          const gSecPt = Math.max(11, Math.round(13 * fontScaleFactor));
+
           const qTextRuns = [];
           if (q.section) {
-            qTextRuns.push({ text: q.section.toUpperCase(), options: { fontSize: 13, bold: true, color: colSecHex, breakLine: true } });
+            qTextRuns.push({ text: q.section.toUpperCase(), options: { fontSize: gSecPt, bold: true, color: colSecHex, breakLine: true } });
           }
-          qTextRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: 26, bold: true, color: colQnumHex } });
-          qTextRuns.push({ text: q.question, options: { fontSize: 23, bold: true, color: colStemHex } });
+          qTextRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: gQPt, bold: true, color: colQnumHex } });
+          qTextRuns.push({ text: q.question, options: { fontSize: gStPt, bold: true, color: colStemHex } });
 
+          const stemBoxH = Math.min(2.8, 2.3 * (fontScaleFactor > 1.2 ? 1.2 : 1.0));
           slide.addText(qTextRuns, {
             x: bLeft,
             y: bTop,
             w: bWidth,
-            h: 2.4,
+            h: stemBoxH,
             wrap: true,
             valign: 'top'
           });
 
           const colW = (bWidth - 0.5) / 2;
-          const topOpts = bTop + 2.8;
+          const topOpts = bTop + stemBoxH + 0.3;
+          const optBoxH = (bTop + bHeight) - topOpts;
 
           // Col 1 (A & C)
           slide.addText([
-            { text: '(A) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
-            { text: q.options.A, options: { fontSize: 21, color: 'F5F5F5', breakLine: true } },
-            { text: '\n', options: { fontSize: 10, breakLine: true } },
-            { text: '(C) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
-            { text: q.options.C, options: { fontSize: 21, color: 'F5F5F5' } }
-          ], { x: bLeft, y: topOpts, w: colW, h: 2.8, wrap: true, valign: 'top' });
+            { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+            { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
+            { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
+            { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+            { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+          ], { x: bLeft, y: topOpts, w: colW, h: optBoxH, wrap: true, valign: 'top' });
 
           // Col 2 (B & D)
           slide.addText([
-            { text: '(B) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
-            { text: q.options.B, options: { fontSize: 21, color: 'F5F5F5', breakLine: true } },
-            { text: '\n', options: { fontSize: 10, breakLine: true } },
-            { text: '(D) ', options: { fontSize: 21, bold: true, color: colOptLblHex } },
-            { text: q.options.D, options: { fontSize: 21, color: 'F5F5F5' } }
-          ], { x: bLeft + colW + 0.5, y: topOpts, w: colW, h: 2.8, wrap: true, valign: 'top' });
+            { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+            { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
+            { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
+            { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+            { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+          ], { x: bLeft + colW + 0.5, y: topOpts, w: colW, h: optBoxH, wrap: true, valign: 'top' });
         }
-        // 3. Standard Vertical Layout with Dynamic Typography
+        // 3. Standard Vertical Layout with Dynamic Typography & Smart Auto-Fit
         else {
-          let stPt = 20, optPt = 17, spPt = 10;
+          let baseSt = 20, baseOpt = 17, baseSp = 10;
           const totalChars = q.question.length + (q.options.A || '').length + (q.options.B || '').length + (q.options.C || '').length + (q.options.D || '').length;
 
           if (chkFontMaximizer.checked) {
-            if (totalChars > 700) { stPt = 14; optPt = 12.5; spPt = 4; }
-            else if (totalChars > 500) { stPt = 16; optPt = 14.5; spPt = 6; }
-            else if (totalChars > 350) { stPt = 18; optPt = 16; spPt = 8; }
-            else { stPt = 22; optPt = 19; spPt = 12; }
+            if (totalChars > 700) { baseSt = 14; baseOpt = 12.5; baseSp = 4; }
+            else if (totalChars > 500) { baseSt = 16; baseOpt = 14.5; baseSp = 6; }
+            else if (totalChars > 350) { baseSt = 18; baseOpt = 16; baseSp = 8; }
+            else { baseSt = 22; baseOpt = 19; baseSp = 12; }
+          }
+
+          let stPt = Math.round(baseSt * fontScaleFactor);
+          let optPt = Math.round(baseOpt * fontScaleFactor);
+          let spPt = Math.max(3, Math.round(baseSp * fontScaleFactor));
+
+          // Smart Auto-Fit Safety Guard: Dynamically scale font to guarantee zero boundary overflow
+          const charsPerLine = Math.max(35, Math.floor(bWidth * (72 / (stPt * 0.55))));
+          const estStemLines = stemLines.reduce((acc, line) => acc + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+          const optCharsPerLine = Math.max(35, Math.floor(bWidth * (72 / (optPt * 0.55))));
+          const optLinesCount = ['A', 'B', 'C', 'D'].filter(k => q.options[k]).reduce((acc, k) => acc + Math.max(1, Math.ceil((q.options[k] || '').length / optCharsPerLine)), 0);
+          const estTotalHeight = (estStemLines * stPt * 1.35 + optLinesCount * optPt * 1.35 + spPt + 30) / 72;
+
+          if (estTotalHeight > bHeight * 0.95) {
+            const damp = (bHeight * 0.95) / estTotalHeight;
+            stPt = Math.max(11, Math.floor(stPt * damp));
+            optPt = Math.max(10, Math.floor(optPt * damp));
+            spPt = Math.max(2, Math.floor(spPt * damp));
           }
 
           const textRuns = [];
           if (q.section) {
-            textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(11, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
+            textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
           }
           textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
           textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, breakLine: true } });
@@ -1033,7 +1100,7 @@ function setupGenerator() {
           // If Inline Answer Mode is selected
           if (solutionMode === 'inline' && q.solution) {
             const ansLine = q.solution.split('\n')[0] || '';
-            textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: 13, bold: true, color: '81C784' } });
+            textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784' } });
           }
 
           slide.addText(textRuns, {
