@@ -839,7 +839,7 @@ function setupGenerator() {
 
     try {
       const pptx = new PptxGenJS();
-      pptx.layout = 'LAYOUT_16x9'; // 13.333 x 7.5 inches
+      pptx.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 inches (PowerPoint Standard Widescreen)
 
       const slideW = 13.333;
       const slideH = 7.5;
