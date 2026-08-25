@@ -596,7 +596,7 @@ btnParsePdf.addEventListener('click', async () => {
     for (const q of state.parsedQuestions) {
       const match = state.questionDiagrams.find(d => 
         d.qNum === q.q_num && 
-        (d.section.toLowerCase() === q.section.toLowerCase() || d.pno > 0)
+        d.section.toLowerCase() === q.section.toLowerCase()
       );
       if (match) {
         q.imageData = match.dataUrl;
@@ -640,7 +640,7 @@ function parseUniversalQuestions(fullStream) {
     const qNum = parseInt(qNumStr, 10);
 
     const preChunk = fullStream.slice(Math.max(0, match.index - 120), match.index);
-    const secMatch = preChunk.match(/\b(Physics|Chemistry|Mathematics|Biology|Social\s+Science|Section\s+[A-Z0-9]+:?[^\n]*)\b/i);
+    const secMatch = (match[0] + " " + preChunk).match(/\b(Physics|Chemistry|Mathematics|Biology|Social\s+Science|Section\s+[A-Z0-9]+:?[^\n]*)\b/i);
     if (secMatch) {
       currentSection = secMatch[1].trim();
     }
