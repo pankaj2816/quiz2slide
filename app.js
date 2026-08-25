@@ -291,6 +291,14 @@ function setupPresets() {
   });
 }
 
+function isMathToken(s) {
+  if (!s || s.length > 7) return false;
+  if (/^(?:state|gravity|density|length|mass|Given|bob|window|vessel|wire|Option|Hence|Solution|Correct)/i.test(s)) return false;
+  if (/^\([A-D1-4]\)$/i.test(s)) return false;
+  if (/^[A-Za-z]{4,}$/.test(s)) return false;
+  return true;
+}
+
 // Math & Chemistry Formula Formatter for Question Stems
 function formatMathText(str) {
   if (!str) return '';
@@ -324,7 +332,8 @@ function formatMathText(str) {
        .replace(/ms[−\-]2\b/g, 'ms⁻²')
        .replace(/cm2\b/g, 'cm²')
        .replace(/m\/s2\b/g, 'm/s²')
-       .replace(/B₂\s*is\s*:\s*B₁\b|B₂\s*:\s*B₁\b/gi, 'B₂/B₁ is:')
+       .replace(/B₂\s*x\s*'/gi, "'x'")
+       .replace(/B₂\s*is\s*:\s*B₁\b|B₂\s*:\s*B₁\b|B₂\s*,\s*B₁\s*is\s*:\b|For\s*x\s*:\s*R\s*=\s*3\s*:\s*4,\s*B₁\s*is\s*:/gi, "For x : R = 3 : 4, B₂/B₁ is:")
        .replace(/γ\s*A\s*\/\s*γ\s*B\s*=\s*\(\s*1\s*\+\s*1\s*\/\s*n\s*\)/gi, 'γ_A / γ_B = (1 + 1/n)');
   return s.trim();
 }
@@ -469,7 +478,7 @@ btnParsePdf.addEventListener('click', async () => {
       for (const l of lines) {
         l.items.sort((a, b) => a.x - b.x);
         
-        // Merge fraction stacks overlapping horizontally, with STRICT keyword guard
+        // Merge fraction stacks overlapping horizontally, with STRICT keyword & math token guard
         let mergedTokens = [];
         let i = 0;
         while (i < l.items.length) {
@@ -477,7 +486,7 @@ btnParsePdf.addEventListener('click', async () => {
           if (i + 1 < l.items.length) {
             const wNext = l.items[i + 1];
             const isKeyword = [w.str, wNext.str].some(s => s.startsWith('Option') || s.startsWith('Q.') || s.startsWith('Correct') || s.startsWith('Solution') || s.startsWith('Hence'));
-            if (!isKeyword && Math.abs(w.x - wNext.x) <= 8.0 && Math.abs(w.y - wNext.y) >= 3.5) {
+            if (!isKeyword && isMathToken(w.str) && isMathToken(wNext.str) && Math.abs(w.x - wNext.x) <= 8.0 && Math.abs(w.y - wNext.y) >= 3.5) {
               const topW = w.y < wNext.y ? w : wNext;
               const botW = w.y < wNext.y ? wNext : w;
               const fracStr = `${topW.str}/${botW.str}`;
