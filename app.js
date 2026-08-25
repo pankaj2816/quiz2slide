@@ -4,15 +4,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // Unicode Math & Superscript / Subscript Maps
 const SUPERSCRIPT_MAP = {
   '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-  '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', 'n': 'ⁿ', 'i': 'ⁱ', 'x': 'ˣ', 'y': 'ʸ',
-  'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ', 'k': 'ᵏ', 'm': 'ᵐ', 'p': 'ᵖ', 'r': 'ʳ', 't': 'ᵗ'
+  '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', 'n': 'ⁿ', 'i': 'ⁱ', 'x': 'ˣ', 'y': 'ʸ'
 };
 
 const SUBSCRIPT_MAP = {
   '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
-  '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎', 'a': 'ₐ', 'e': 'ₑ', 'h': 'ₕ', 'i': 'ᵢ', 'j': 'ⱼ',
-  'k': 'ₖ', 'l': 'ₗ', 'm': 'ₘ', 'n': 'ₙ', 'o': 'ₒ', 'p': 'ₚ', 'r': 'ᵣ', 's': 'ₛ', 't': 'ₜ', 'u': 'ᵤ',
-  'v': 'ᵥ', 'x': 'ₓ', 'y': 'ᵧ'
+  'r': 'ᵣ', 't': 'ₜ', 'L': 'ₗ', '0': '₀'
 };
 
 // Application State
@@ -293,7 +290,7 @@ function setupPresets() {
   });
 }
 
-// Math Formula and Symbol Formatter
+// Math Formula and Symbol Formatter for Stems and Solutions
 function formatMathText(str) {
   if (!str) return '';
   let s = str;
@@ -311,12 +308,84 @@ function formatMathText(str) {
        .replace(/ ∘/g, '°')
        .replace(/\bdeg\b/g, '°')
        .replace(/\binfty\b/gi, '∞')
-       .replace(/\bsqrt\b/gi, '√')
        .replace(/(\d+)\s*\*\s*10\^([-\d]+)/g, (m, c, exp) => `${c} × 10${exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join('')}`)
-       .replace(/\^([0-9nixya-e\+-]+)/g, (m, exp) => exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join(''))
        .replace(/\s+/g, ' ')
-       .replace(/\s+([,.:;?!])/g, '$1');
+       .replace(/\s+([,.:;?!])/g, '$1')
+       .replace(/ϵ0\b/g, 'ϵ₀')
+       .replace(/μ0\b/g, 'μ₀')
+       .replace(/μr\b/g, 'μᵣ')
+       .replace(/μt\b/g, 'μₜ');
   return s.trim();
+}
+
+// High-Precision Option Cleaner with Mathematical Fraction & Trig Reconstruction
+function cleanOptionText(optRaw) {
+  if (!optRaw) return '';
+  const lines = optRaw.split('\n').map(l => l.trim()).filter(l => l && !isHeaderOrFooter(l));
+  let s = lines.join('\n');
+
+  // 1. Reconstruct trigonometric inverse fractions: cos-1 ( 1 / √3 ), etc.
+  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹($1 / $2)');
+  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1 / $2)');
+  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹($1 / $2)');
+  s = s.replace(/cos\s*[-−]?\s*1\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1 / $2)');
+  s = s.replace(/cos\s*[-−]\s*1/gi, 'cos⁻¹');
+  s = s.replace(/sin\s*[-−]\s*1/gi, 'sin⁻¹');
+  s = s.replace(/tan\s*[-−]\s*1/gi, 'tan⁻¹');
+
+  // 2. Reconstruct vertical fraction blocks in options (e.g. "σq\n4ϵ0", "3σq\n2ϵ0", "μ\nμ0 − 1")
+  s = s.replace(/(?:χ\s*=\s*)?μ\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = μ/μ₀ $1');
+  s = s.replace(/(?:χ\s*=\s*)?μr\s*\n+\s*μ0\s*([−\-+]\s*1)/gi, 'χ = μᵣ/μ₀ $1');
+  s = s.replace(/(?:χ\s*=\s*)?1\s*([−\-+])\s*μ\s*\n+\s*μ0/gi, 'χ = 1 $1 μ/μ₀');
+
+  let optLines = s.split('\n').map(l => l.trim()).filter(Boolean);
+  if (optLines.length === 2) {
+    if (optLines[0].length <= 15 && optLines[1].length <= 15 && !optLines[0].includes('=') && !optLines[1].includes('=')) {
+      s = `${optLines[0]} / ${optLines[1]}`;
+    } else {
+      s = optLines.join(' ');
+    }
+  } else if (optLines.length > 2) {
+    s = optLines.join(' ');
+  }
+
+  // 3. Reconstruct optical / quantum formulas: √2 m ( hc / λ − ϕ ) / eB
+  s = s.replace(/√\s*(\d+)\s*m\s*\(\s*hc\s+([^\s\)]+)\s*[-−]\s*ϕ\s*\)\s*\/eB/gi, '√$1m (hc/$2 − ϕ) / eB');
+  s = s.replace(/√\s*m\s*\(\s*hc\s+([^\s\)]+)\s*[-−]\s*ϕ\s*\)\s*\/eB/gi, '√m (hc/$1 − ϕ) / eB');
+  s = s.replace(/2\s*√\s*m\s*\(\s*hc\s+([^\s\)]+)\s*[-−]\s*ϕ\s*\)\s*\/eB/gi, '2√m (hc/$1 − ϕ) / eB');
+
+  // 4. Standardize punctuation & operators
+  s = s.replace(/\s+/g, ' ')
+       .replace(/\(\s+/g, '(')
+       .replace(/\s+\)/g, ')')
+       .replace(/\[\s+/g, '[')
+       .replace(/\s+\]/g, ']')
+       .replace(/([0-9a-zA-Z])\s*\/\s*([0-9a-zA-Z])/g, '$1 / $2')
+       .replace(/,\s*/g, ', ')
+       .replace(/;\s*/g, '; ')
+       .replace(/\+-/g, '±')
+       .replace(/<=/g, '≤')
+       .replace(/>=/g, '≥')
+       .replace(/!=/g, '≠')
+       .replace(/-->|->/g, '→')
+       .replace(/ ∘C|∘C| ∘ C/g, '°C')
+       .replace(/ ∘/g, '°')
+       .replace(/\bdeg\b/g, '°')
+       .trim();
+
+  // 5. Scientific notations
+  s = s.replace(/ϵ0\b/g, 'ϵ₀')
+       .replace(/μ0\b/g, 'μ₀')
+       .replace(/μr\b/g, 'μᵣ')
+       .replace(/μt\b/g, 'μₜ')
+       .replace(/10\s*[-−]\s*(\d+)\b/g, '10⁻$1')
+       .replace(/h[-−]1\b/g, 'h⁻¹')
+       .replace(/ms[-−]2\b/g, 'ms⁻²')
+       .replace(/m\/s2\b/g, 'm/s²')
+       .replace(/cm2\b/g, 'cm²')
+       .replace(/m2\b/g, 'm²');
+
+  return s;
 }
 
 // Universal Client-Side PDF Parser using PDF.js
@@ -367,28 +436,13 @@ btnParsePdf.addEventListener('click', async () => {
         }
       }
 
-      // Calculate average font size for math superscript detection
-      let validHeights = textContent.items.map(it => it.height || (it.transform ? Math.abs(it.transform[3]) : 10)).filter(h => h > 4);
-      let avgPageHeight = validHeights.length > 0 ? (validHeights.reduce((a, b) => a + b, 0) / validHeights.length) : 10;
-
       let items = textContent.items.map(item => {
         const tx = item.transform;
-        const rawText = item.str;
-        const itemH = item.height || Math.abs(tx[3]) || 10;
-        const yTop = (viewport.height / 2.0) - (tx[5] / 2.0);
-
-        let transformed = rawText;
-        if (itemH < avgPageHeight * 0.85 && rawText.length <= 6) {
-          if (/^[0-9nixya-e\+-=]+$/.test(rawText)) {
-            transformed = rawText.split('').map(c => SUPERSCRIPT_MAP[c] || c).join('');
-          }
-        }
-
         return {
-          str: transformed,
+          str: item.str,
           x: tx[4],
-          y: yTop,
-          height: itemH
+          y: (viewport.height / 2.0) - (tx[5] / 2.0),
+          height: item.height || Math.abs(tx[3]) || 10
         };
       });
 
@@ -422,8 +476,6 @@ btnParsePdf.addEventListener('click', async () => {
           const w = it.str;
           if (!lineText) {
             lineText = w;
-          } else if (Object.values(SUPERSCRIPT_MAP).some(sc => w.includes(sc)) || Object.values(SUBSCRIPT_MAP).some(sc => w.includes(sc))) {
-            lineText += w;
           } else if ([',', '.', ':', ';', '?', '!', '%', '°', '°C'].includes(w)) {
             lineText += w;
           } else {
@@ -465,11 +517,6 @@ btnParsePdf.addEventListener('click', async () => {
 function isHeaderOrFooter(text) {
   const l = text.toLowerCase();
   return l.includes('7th cbse') || l.includes('careers360') || (l.includes('page ') && l.length < 15) || l.includes('maximum marks') || l.includes('general instructions') || l.includes('subject:');
-}
-
-function cleanOptionText(optRaw) {
-  const lines = (optRaw || '').split('\n').map(l => l.trim()).filter(l => l && !isHeaderOrFooter(l));
-  return formatMathText(lines.join(' '));
 }
 
 // Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
