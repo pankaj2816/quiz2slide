@@ -1,6 +1,20 @@
 // Configure PDF.js Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// Unicode Math & Superscript / Subscript Maps
+const SUPERSCRIPT_MAP = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+  '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', 'n': 'ⁿ', 'i': 'ⁱ', 'x': 'ˣ', 'y': 'ʸ',
+  'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ', 'k': 'ᵏ', 'm': 'ᵐ', 'p': 'ᵖ', 'r': 'ʳ', 't': 'ᵗ'
+};
+
+const SUBSCRIPT_MAP = {
+  '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+  '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎', 'a': 'ₐ', 'e': 'ₑ', 'h': 'ₕ', 'i': 'ᵢ', 'j': 'ⱼ',
+  'k': 'ₖ', 'l': 'ₗ', 'm': 'ₘ', 'n': 'ₙ', 'o': 'ₒ', 'p': 'ₚ', 'r': 'ᵣ', 's': 'ₛ', 't': 'ₜ', 'u': 'ᵤ',
+  'v': 'ᵥ', 'x': 'ₓ', 'y': 'ᵧ'
+};
+
 // Application State
 let state = {
   pdfArrayBuffer: null,
@@ -279,7 +293,33 @@ function setupPresets() {
   });
 }
 
-// Memory-Efficient Client-Side PDF Parser using PDF.js
+// Math Formula and Symbol Formatter
+function formatMathText(str) {
+  if (!str) return '';
+  let s = str;
+  s = s.replace(/\|/g, ' ')
+       .replace(/\+-/g, '±')
+       .replace(/<=/g, '≤')
+       .replace(/>=/g, '≥')
+       .replace(/!=/g, '≠')
+       .replace(/-->|->/g, '→')
+       .replace(/<--|<-/g, '←')
+       .replace(/<->|<-->/g, '↔')
+       .replace(/~=/g, '≈')
+       .replace(/ ∘C|∘C| ∘ C/g, '°C')
+       .replace(/ ∘F|∘F/g, '°F')
+       .replace(/ ∘/g, '°')
+       .replace(/\bdeg\b/g, '°')
+       .replace(/\binfty\b/gi, '∞')
+       .replace(/\bsqrt\b/gi, '√')
+       .replace(/(\d+)\s*\*\s*10\^([-\d]+)/g, (m, c, exp) => `${c} × 10${exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join('')}`)
+       .replace(/\^([0-9nixy\+-]+)/g, (m, exp) => exp.split('').map(ch => SUPERSCRIPT_MAP[ch] || ch).join(''))
+       .replace(/\s+/g, ' ')
+       .replace(/\s+([,.:;?!])/g, '$1');
+  return s.trim();
+}
+
+// Memory-Efficient Client-Side PDF Parser using PDF.js with Math Formula Baseline Extraction
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
@@ -310,7 +350,6 @@ btnParsePdf.addEventListener('click', async () => {
         await page.render({ canvasContext: offCtx, viewport: viewport }).promise;
 
         const cropCanvas = document.createElement('canvas');
-        // Exact diagram coordinates: x = 22% to 79%, y = 63.5% to 84%
         const cX = viewport.width * 0.22;
         const cY = viewport.height * 0.635;
         const cW = viewport.width * 0.57;
@@ -325,13 +364,30 @@ btnParsePdf.addEventListener('click', async () => {
         offCanvas.width = offCanvas.height = 0;
       }
 
+      // Calculate average font size on page for math baseline/superscript detection
+      let validHeights = textContent.items.map(it => it.height || (it.transform ? Math.abs(it.transform[3]) : 10)).filter(h => h > 4);
+      let avgPageHeight = validHeights.length > 0 ? (validHeights.reduce((a, b) => a + b, 0) / validHeights.length) : 10;
+
       let items = textContent.items.map(item => {
         const tx = item.transform;
+        const rawText = item.str;
+        const itemH = item.height || Math.abs(tx[3]) || 10;
+        const yTop = (viewport.height / 2.0) - (tx[5] / 2.0);
+
+        // Math Superscript & Subscript baseline detection
+        let transformed = rawText;
+        if (itemH < avgPageHeight * 0.85 && rawText.length <= 6) {
+          // If characters are alphanumeric/operators, convert to superscript/subscript
+          if (/^[0-9nixya-e\+-=]+$/.test(rawText)) {
+            transformed = rawText.split('').map(c => SUPERSCRIPT_MAP[c] || c).join('');
+          }
+        }
+
         return {
-          str: item.str,
+          str: transformed,
           x: tx[4],
-          y: (viewport.height / 2.0) - (tx[5] / 2.0),
-          height: item.height || 10
+          y: yTop,
+          height: itemH
         };
       });
 
@@ -360,7 +416,20 @@ btnParsePdf.addEventListener('click', async () => {
       let pageLines = [];
       for (const l of lines) {
         l.items.sort((a, b) => a.x - b.x);
-        let lineText = l.items.map(i => i.str).join(' ').trim();
+        let lineText = "";
+        for (const it of l.items) {
+          const w = it.str;
+          if (!lineText) {
+            lineText = w;
+          } else if (Object.values(SUPERSCRIPT_MAP).some(sc => w.includes(sc)) || Object.values(SUBSCRIPT_MAP).some(sc => w.includes(sc))) {
+            lineText += w;
+          } else if ([',', '.', ':', ';', '?', '!', '%', '°', '°C'].includes(w)) {
+            lineText += w;
+          } else {
+            lineText += " " + w;
+          }
+        }
+        lineText = formatMathText(lineText);
         if (lineText && !isHeaderOrFooter(lineText)) {
           pageLines.push(lineText);
         }
@@ -375,8 +444,8 @@ btnParsePdf.addEventListener('click', async () => {
 
     // Attach Q22 diagram
     for (const q of state.parsedQuestions) {
-      if (q.q_num === 22 && state.pageImages[5]) {
-        q.imageData = state.pageImages[5];
+      if (q.q_num === 22) {
+        q.imageData = state.pageImages[5] || Object.values(state.pageImages)[0];
       }
     }
 
@@ -397,18 +466,14 @@ function isHeaderOrFooter(text) {
   return l.includes('7th cbse') || l.includes('page ') || l.includes('maximum marks') || l.includes('general instructions') || l.includes('subject:');
 }
 
-function cleanText(str) {
-  return str.replace(/\|/g, ' ').replace(/\s+/g, ' ').replace(/\s+([,.:;?!])/g, '$1').replace(/ ∘C/g, '°C').replace(/∘C/g, '°C').trim();
-}
-
 function cleanOptionText(optRaw) {
   const lines = (optRaw || '').split('\n').map(l => l.trim()).filter(l => l && !isHeaderOrFooter(l));
-  return cleanText(lines.join(' '));
+  return formatMathText(lines.join(' '));
 }
 
 function parseQuestionsFromTextStream(fullStream) {
-  // CRITICAL FIX: Find the first genuine question stem or standalone Section A header
-  const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+The\s+majestic/i);
+  // CRITICAL FIX: Anchor to the first genuine question stem or standalone Section A header
+  const firstQMatch = fullStream.match(/(?:^|\n)\s*(?:Section\s+[A-Z0-9]+:\s+[^\n]+\n+)?\s*(?:Q\.?\s*1|1\.)\s+[A-Z]/i);
   if (firstQMatch) {
     fullStream = fullStream.slice(firstQMatch.index);
   } else {
@@ -426,7 +491,7 @@ function parseQuestionsFromTextStream(fullStream) {
     if (!matchCurr) break;
 
     if (matchCurr[1]) {
-      currentSection = cleanText(matchCurr[1]);
+      currentSection = formatMathText(matchCurr[1]);
     }
 
     const qStart = currentPos + matchCurr.index + matchCurr[0].length;
@@ -467,7 +532,7 @@ function parseQuestionsFromTextStream(fullStream) {
       optD = cleanOptionText(rawBlock.slice(mD.index + mD[0].length));
     }
 
-    let stemLines = stem.split('\n').map(l => cleanText(l)).filter(l => l && !isHeaderOrFooter(l));
+    let stemLines = stem.split('\n').map(l => formatMathText(l)).filter(l => l && !isHeaderOrFooter(l));
     const optCombined = `${optA} ${optB} ${optC} ${optD}`.toLowerCase();
     if (optCombined.includes('1 and 2') || optCombined.includes('statement 1') || optCombined.includes('pair')) {
       let counter = 1;
@@ -597,7 +662,7 @@ function setupGenerator() {
           (q.options.D || '').length
         );
 
-        // 1. Question with Diagram (e.g. Q22)
+        // 1. Question with Diagram (e.g. Q22 or Geometry/Math figures)
         if (q.imageData) {
           const topH = 1.1;
           const textRunsTop = [];
