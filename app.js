@@ -389,6 +389,13 @@ function cleanOptionText(optRaw) {
        .replace(/σq\s*\n*\s*4\s*ϵ0/g, 'σq / 4ϵ₀')
        .replace(/σq\s*\n*\s*2\s*ϵ0/g, 'σq / 2ϵ₀');
 
+  // 5. Reconstruct charges / units on single option lines
+  s = s.replace(/nC\s*\/\s*m\s*2\b/gi, 'nC/m²')
+       .replace(/0\.885\s*nC\s*\/\s*m\s*Option\s*1:\s*2/gi, 'Option 1:\n0.885 nC/m²')
+       .replace(/17\.7\s*nC\s*\/\s*m\s*Option\s*2:\s*2/gi, 'Option 2:\n17.7 nC/m²')
+       .replace(/885\s*nC\s*\/\s*m\s*Option\s*3:\s*2/gi, 'Option 3:\n885 nC/m²')
+       .replace(/1\.77\s*nC\s*\/\s*m\s*Option\s*4:\s*2/gi, 'Option 4:\n1.77 nC/m²');
+
   let optLines = s.split('\n').map(l => l.trim()).filter(Boolean);
   if (optLines.length === 2 && optLines[0].length <= 15 && optLines[1].length <= 15 && !optLines[0].includes('=')) {
     s = `${optLines[0]} / ${optLines[1]}`;
@@ -396,7 +403,7 @@ function cleanOptionText(optRaw) {
     s = optLines.join(' ');
   }
 
-  // 5. Clean up units, coordinates, and spacing
+  // 6. Clean up units, coordinates, and spacing
   s = s.replace(/\s*ϵ\s*0\b/gi, ' ϵ₀')
        .replace(/\s*μ\s*0\b/gi, ' μ₀')
        .replace(/\s*μ\s*r\b/gi, ' μᵣ')
