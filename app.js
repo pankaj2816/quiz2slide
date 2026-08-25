@@ -387,9 +387,21 @@ function formatMathText(str) {
        .replace(/50\s*7\s*m\/s/gi, '50/7 m/s')
        .replace(/\(5\s*t\s*\+\s*π\s*3\s*\)/gi, '(5t + π/3)')
        .replace(/transverse strain for the wire are 0\.2 and\s+10\s*[−\-]\s*3/gi, 'transverse strain for the wire are 0.2 and 5 × 10⁻³')
-       .replace(/elastic potential energy density of the wire is ____\s+×10\s*5/gi, 'elastic potential energy density of the wire is ____ × 10⁵');
+       .replace(/elastic potential energy density of the wire is ____\s+×10\s*5/gi, 'elastic potential energy density of the wire is ____ × 10⁵')
+       .replace(/slanted object\s+AB/gi, 'slanted object AB')
+       .replace(/\+9\s+q\b/g, '+9q')
+       .replace(/\+10\s*μ\s*C\b/gi, '+10 μC')
+       .replace(/'\s*([αxσOMF])\s*'/gi, "'$1'");
 
-  return s.trim();
+  // Precision Whitespace Normalizer
+  s = s.replace(/\s+([,.:;?!%°])/g, '$1')
+       .replace(/([,;?!])(?=[^\s\d\)])/g, '$1 ')
+       .replace(/\(\s+/g, '(')
+       .replace(/\s+\)/g, ')')
+       .replace(/[ \t]+/g, ' ')
+       .trim();
+
+  return s;
 }
 
 // High-Precision Option Cleaner with Exact Mathematical Fraction & Function Reconstruction
@@ -398,7 +410,7 @@ function cleanOptionText(optRaw) {
   let s = optRaw;
 
   s = s.replace(/\|/g, ' ')
-       .replace(/\s+/g, ' ')
+       .replace(/[ \t]+/g, ' ')
        .replace(/cos\s*[-−]?\s*1/gi, 'cos⁻¹')
        .replace(/sin\s*[-−]?\s*1/gi, 'sin⁻¹')
        .replace(/tan\s*[-−]?\s*1/gi, 'tan⁻¹');
@@ -470,7 +482,11 @@ function cleanOptionText(optRaw) {
        .replace(/\(\s*d\s*\/\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, '(d/$1, $2, $3)')
        .replace(/rad\s*\/\s*s/g, 'rad/s')
        .replace(/nC\s*\/\s*m\s*2/g, 'nC/m²')
-       .replace(/\s+/g, ' ')
+       .replace(/\s+([,.:;?!%°])/g, '$1')
+       .replace(/([,;?!])(?=[^\s\d\)])/g, '$1 ')
+       .replace(/\(\s+/g, '(')
+       .replace(/\s+\)/g, ')')
+       .replace(/[ \t]+/g, ' ')
        .replace(/\)\s*\)+$/g, ')')
        .trim();
 
@@ -504,18 +520,18 @@ btnParsePdf.addEventListener('click', async () => {
       let items = textContent.items.map(item => {
         const tx = item.transform;
         return {
-          str: item.str,
+          str: (item.str || '').trim(),
           x: tx[4],
           y: (viewport.height / 2.0) - (tx[5] / 2.0),
           height: item.height || Math.abs(tx[3]) || 10
         };
-      });
+      }).filter(it => Boolean(it.str));
 
       // Filter right-edge marks column and standard headers/footers
       items = items.filter(it => {
-        if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str.trim())) return false;
+        if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str)) return false;
         if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz') || it.str.toLowerCase().includes('careers360'))) return false;
-        if (it.y > ((viewport.height / 2.0) - 45) && (it.str.toLowerCase().includes('page') || /^\d+$/.test(it.str.trim()))) return false;
+        if (it.y > ((viewport.height / 2.0) - 45) && (it.str.toLowerCase().includes('page') || /^\d+$/.test(it.str))) return false;
         return true;
       });
 
@@ -547,6 +563,7 @@ btnParsePdf.addEventListener('click', async () => {
         let lineText = "";
         for (const t of l.items) {
           let tokenStr = t.str;
+          if (!tokenStr) continue;
           if (!lineText) {
             lineText = tokenStr;
           } else if ([',', '.', ':', ';', '?', '!', '%', '°', '°C'].includes(tokenStr)) {
