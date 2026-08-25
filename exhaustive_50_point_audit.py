@@ -295,5 +295,5 @@ def run_50_point_audit(pptx_path):
     return len(slide_failures)
 
 if __name__ == "__main__":
-    pptx_file = r"d:\Work\kaku\test_output\Quiz_Presentation_30_Slides_Rev90.pptx"
+    pptx_file = r"d:\Work\kaku\test_output\Quiz_Presentation_Jumbo_140pct.pptx"
     run_50_point_audit(pptx_file)
