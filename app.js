@@ -20,7 +20,7 @@ let state = {
   pdfFileName: '',
   bgImageBase64: typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : null,
   parsedQuestions: [],
-  questionDiagrams: {}, // { qNum: base64Data }
+  questionDiagrams: [], // [ { pno, qNum, section, snippet, dataUrl } ]
   lastGeneratedBlob: null,
   bbox: {
     left_ratio: 0.36,
@@ -339,7 +339,11 @@ function cleanOptionText(optRaw) {
        .replace(/tan\s*[-−]\s*1/gi, 'tan⁻¹');
 
   // 2. Reconstruct susceptibility relations:
-  s = s.replace(/μ\s*χ\s*=\s*μ\s*0\s*([−\-+]\s*1)/gi, 'χ = (μ/μ₀) $1')
+  s = s.replace(/(?:μ\s*\/\s*χ|μ\s*χ)\s*=\s*μ₀\s*([−\-+]\s*1)/gi, 'χ = (μ/μ₀) $1')
+       .replace(/(?:μ\s*\/\s*χ|μ\s*χ)\s*=\s*r\s*\+\s*1\s*μ₀/gi, 'χ = (μᵣ/μ₀) + 1')
+       .replace(/(?:μ\s*\/\s*χ|μ\s*χ)\s*=\s*1\s*[-−]\s*μ₀/gi, 'χ = 1 − (μ/μ₀)')
+       .replace(/χ\s*=\s*μₜ\s*\+\s*1/gi, 'χ = μₜ + 1')
+       .replace(/μ\s*χ\s*=\s*μ\s*0\s*([−\-+]\s*1)/gi, 'χ = (μ/μ₀) $1')
        .replace(/μ\s*χ\s*=\s*r\s*\+\s*1\s*μ\s*0/gi, 'χ = (μᵣ/μ₀) + 1')
        .replace(/μ\s*χ\s*=\s*1\s*[-−]\s*μ\s*0/gi, 'χ = 1 − (μ/μ₀)')
        .replace(/χ\s*=\s*μ\s*t\s*\+\s*1/gi, 'χ = μₜ + 1')
@@ -375,7 +379,7 @@ function cleanOptionText(optRaw) {
   return s;
 }
 
-// Universal Client-Side PDF Parser using PDF.js with Strict Guarded Diagram Detection
+// Universal Client-Side PDF Parser using PDF.js with Section-Aware Diagram Detection
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
@@ -389,7 +393,9 @@ btnParsePdf.addEventListener('click', async () => {
     const numPages = pdfDoc.numPages;
 
     let fullLines = [];
-    state.questionDiagrams = {};
+    state.questionDiagrams = [];
+
+    let currentSection = 'Physics';
 
     for (let pno = 1; pno <= numPages; pno++) {
       genStatusText.innerText = `Parsing page ${pno} of ${numPages}...`;
@@ -433,13 +439,19 @@ btnParsePdf.addEventListener('click', async () => {
         l.items.sort((a, b) => a.x - b.x);
         let lineText = l.items.map(i => i.str).join(' ').trim();
         lineText = formatMathText(lineText);
-        if (lineText && !isHeaderOrFooter(lineText)) {
-          pageLines.push(lineText);
+        if (lineText) {
+          if (lineText.toLowerCase().includes('chemistry')) currentSection = 'Chemistry';
+          if (lineText.toLowerCase().includes('physics')) currentSection = 'Physics';
+          if (lineText.toLowerCase().includes('mathematics')) currentSection = 'Mathematics';
+          if (lineText.toLowerCase().includes('biology')) currentSection = 'Biology';
+          
+          if (!isHeaderOrFooter(lineText)) {
+            pageLines.push(lineText);
+          }
         }
       }
 
-      // Strict Guarded Diagram Detection on this Page:
-      // ONLY crop if chkAutoDiagrams is checked AND the question stem explicitly says "shown in figure / diagram"
+      // Strict Guarded Section-Aware Diagram Detection on this Page:
       if (chkAutoDiagrams.checked) {
         for (let i = 0; i < lines.length; i++) {
           const lineStr = lines[i].items.map(it => it.str).join(' ');
@@ -482,7 +494,13 @@ btnParsePdf.addEventListener('click', async () => {
               const cropCtx = cropCanvas.getContext('2d');
               cropCtx.drawImage(offCanvas, cX, cY, cW, cH, 0, 0, cropCanvas.width, cropCanvas.height);
 
-              state.questionDiagrams[qNum] = cropCanvas.toDataURL('image/png');
+              state.questionDiagrams.push({
+                pno: pno,
+                qNum: qNum,
+                section: currentSection,
+                snippet: fullStemText.slice(0, 50),
+                dataUrl: cropCanvas.toDataURL('image/png')
+              });
               offCanvas.width = offCanvas.height = 0;
             }
           }
@@ -496,10 +514,14 @@ btnParsePdf.addEventListener('click', async () => {
     const fullStream = fullLines.join('\n');
     state.parsedQuestions = parseUniversalQuestions(fullStream);
 
-    // Attach genuine question diagrams (e.g. Q4 lens, Q5 plates, Q13 lamina, Q17 surface, Q19 bob)
+    // Section-aware diagram linking
     for (const q of state.parsedQuestions) {
-      if (state.questionDiagrams[q.q_num]) {
-        q.imageData = state.questionDiagrams[q.q_num];
+      const match = state.questionDiagrams.find(d => 
+        d.qNum === q.q_num && 
+        (d.section.toLowerCase() === q.section.toLowerCase() || q.question.includes(d.snippet.slice(10, 30)))
+      );
+      if (match) {
+        q.imageData = match.dataUrl;
       }
     }
 
