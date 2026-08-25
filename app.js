@@ -315,7 +315,15 @@ function formatMathText(str) {
        .replace(/\s*ϵ\s*0\b/gi, ' ϵ₀')
        .replace(/\s*μ\s*0\b/gi, ' μ₀')
        .replace(/\s*μ\s*r\b/gi, ' μᵣ')
-       .replace(/\s*μ\s*t\b/gi, ' μₜ');
+       .replace(/\s*μ\s*t\b/gi, ' μₜ')
+       .replace(/ab[−\-]2\b/g, 'ab⁻²')
+       .replace(/C4H9Br\b/g, 'C₄H₉Br')
+       .replace(/NaNH2\b/g, 'NaNH₂')
+       .replace(/kg\/m3\b/g, 'kg/m³')
+       .replace(/Nm[−\-]2\b/g, 'Nm⁻²')
+       .replace(/ms[−\-]2\b/g, 'ms⁻²')
+       .replace(/cm2\b/g, 'cm²')
+       .replace(/m\/s2\b/g, 'm/s²');
   return s.trim();
 }
 
@@ -379,7 +387,7 @@ function cleanOptionText(optRaw) {
   return s;
 }
 
-// Universal Client-Side PDF Parser using PDF.js with Section-Aware Diagram Detection
+// Universal Client-Side PDF Parser using PDF.js with Robust 2D Baseline Clustering
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
@@ -423,21 +431,74 @@ btnParsePdf.addEventListener('click', async () => {
 
       items.sort((a, b) => a.y - b.y || a.x - b.x);
 
+      // Robust Baseline Clustering: Group words within +/- 6.0px baseline
       let lines = [];
       for (const it of items) {
-        let matched = lines.find(l => Math.abs(l.y - it.y) < 4.5);
+        let matched = null;
+        for (const l of lines) {
+          if (Math.abs(it.y - l.base_y) <= 6.0) {
+            matched = l;
+            break;
+          }
+        }
         if (matched) {
           matched.items.push(it);
+          matched.base_y = matched.items.reduce((sum, item) => sum + item.y, 0) / matched.items.length;
         } else {
-          lines.push({ y: it.y, items: [it] });
+          lines.push({ base_y: it.y, items: [it] });
         }
       }
-      lines.sort((a, b) => a.y - b.y);
+      lines.sort((a, b) => a.base_y - b.base_y);
 
       let pageLines = [];
       for (const l of lines) {
         l.items.sort((a, b) => a.x - b.x);
-        let lineText = l.items.map(i => i.str).join(' ').trim();
+        
+        // Merge fraction stacks overlapping horizontally (e.g. numerator 'a' at y=626 above denominator 'V2' at y=636)
+        let mergedTokens = [];
+        let i = 0;
+        while (i < l.items.length) {
+          const w = l.items[i];
+          if (i + 1 < l.items.length) {
+            const wNext = l.items[i + 1];
+            if (Math.abs(w.x - wNext.x) <= 8.0 && Math.abs(w.y - wNext.y) >= 3.5) {
+              const topW = w.y < wNext.y ? w : wNext;
+              const botW = w.y < wNext.y ? wNext : w;
+              const fracStr = `${topW.str}/${botW.str}`;
+              mergedTokens.push({ x: Math.min(w.x, wNext.x), str: fracStr });
+              i += 2;
+              continue;
+            }
+          }
+          mergedTokens.push({ x: w.x, str: w.str });
+          i += 1;
+        }
+
+        mergedTokens.sort((a, b) => a.x - b.x);
+
+        let lineText = "";
+        for (const t of mergedTokens) {
+          let tokenStr = t.str;
+          if (tokenStr === 'a/V2' || tokenStr === 'a/V²') tokenStr = 'a/V²';
+          if (!lineText) {
+            lineText = tokenStr;
+          } else if ([',', '.', ':', ';', '?', '!', '%', '°', '°C'].includes(tokenStr)) {
+            lineText += tokenStr;
+          } else if (lineText.endsWith('(') || tokenStr.startsWith(')')) {
+            lineText += tokenStr;
+          } else {
+            lineText += " " + tokenStr;
+          }
+        }
+
+        // Clean Equation 2 formatting: (P + a/V²)(V - b) = RT
+        lineText = lineText.replace(/\(P\s*\+\s*a\/V2\s*\)/g, '(P + a/V²)')
+                           .replace(/\(P\s*\+\s*a\/V²\s*\)/g, '(P + a/V²)')
+                           .replace(/\(P\s*\+\s*a\)\s*V2/g, '(P + a/V²)')
+                           .replace(/\(P\s*\+\s*a\s*\/\s*V2\s*\)/g, '(P + a/V²)')
+                           .replace(/\(V\s*[−\-]\s*b\s*\)/g, '(V − b)')
+                           .replace(/ab[−\-]2\b/g, 'ab⁻²');
+
         lineText = formatMathText(lineText);
         if (lineText) {
           if (lineText.toLowerCase().includes('chemistry')) currentSection = 'Chemistry';
@@ -459,20 +520,20 @@ btnParsePdf.addEventListener('click', async () => {
           if (qm) {
             const qNum = parseInt(qm[1], 10);
             let fullStemText = lineStr;
-            let stemBottomY = lines[i].y + 15;
+            let stemBottomY = lines[i].base_y + 15;
             let optTopY = null;
 
             for (let j = i + 1; j < lines.length; j++) {
               const nextLineStr = lines[j].items.map(it => it.str).join(' ');
               if (/^(?:Option\s*[1-4A-D]:|\([A-D1-4]\)|[A-D]\.)/i.test(nextLineStr.trim())) {
-                optTopY = lines[j].y;
+                optTopY = lines[j].base_y;
                 break;
               }
               if (/^Q(?:uestion)?\.?\s*\d+/i.test(nextLineStr.trim()) || /^(?:Solution|Correct Answer):/i.test(nextLineStr.trim())) {
                 break;
               }
               fullStemText += " " + nextLineStr;
-              stemBottomY = Math.max(stemBottomY, lines[j].y + 12);
+              stemBottomY = Math.max(stemBottomY, lines[j].base_y + 12);
             }
 
             // ONLY extract if stem contains explicit diagram keyword AND has sufficient gap!
@@ -614,6 +675,7 @@ function parseUniversalQuestions(fullStream) {
       optD = cleanOptionText(qaChunk.slice(mD.index + mD[0].length));
     }
 
+    // Clean stem lines
     let stemLines = stem.split('\n').map(l => formatMathText(l)).filter(l => l && !isHeaderOrFooter(l));
 
     questions.push({
