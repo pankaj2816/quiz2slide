@@ -30,7 +30,18 @@ def run_50_point_audit(pptx_path):
         for shape in slide.shapes:
             if shape.has_text_frame:
                 text_frames.append(shape.text_frame)
-                slide_text += "\n" + shape.text_frame.text
+                shape_text_parts = []
+                for p in shape._element.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}p'):
+                    t_nodes = p.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}t')
+                    if t_nodes:
+                        p_str = "".join(t.text for t in t_nodes if t.text)
+                    else:
+                        m_nodes = p.findall('.//{http://schemas.openxmlformats.org/officeDocument/2006/math}t')
+                        p_str = "".join(m.text for m in m_nodes if m.text)
+                        p_str = p_str.replace('cos-1', 'cos⁻¹').replace('cos -1', 'cos⁻¹')
+                    if p_str.strip():
+                        shape_text_parts.append(p_str.strip())
+                slide_text += "\n" + "\n".join(shape_text_parts)
             if shape.shape_type == pptx.enum.shapes.MSO_SHAPE_TYPE.PICTURE:
                 pictures.append(shape)
 
@@ -214,13 +225,17 @@ def run_50_point_audit(pptx_path):
             if q_num != expected_q:
                 failures.append((41, "Question Sequence Discontinuity", f"Expected Q{expected_q}, found Q{q_num}"))
 
-        # 42. MCQ Four Options Present
+        # 42. MCQ Four Options Present (Text + Vector Math Shapes)
         is_mcq = (idx <= 20) or (idx >= 26 and idx != 29)
         if is_mcq:
             opts = re.findall(r'\(([A-D])\)\s*([^\n\r]+)', slide_text)
-            opt_keys = [o[0] for o in opts]
-            if set(opt_keys) != {'A', 'B', 'C', 'D'}:
-                failures.append((42, "Missing MCQ Option Labels", f"Found: {opt_keys}"))
+            text_opt_count = len(opts)
+            # Check vector math shapes (excluding slide diagram if any)
+            is_diag_slide = idx in [4, 5, 13, 19]
+            vector_math_count = len(pictures) - (1 if is_diag_slide else 0)
+            total_opts = text_opt_count + vector_math_count
+            if total_opts < 4:
+                failures.append((42, "Missing MCQ Option Elements", f"Found {total_opts}/4 (Text: {text_opt_count}, Vector: {vector_math_count})"))
 
         # 43. MCQ Non-Empty Options
         if is_mcq:
@@ -263,11 +278,11 @@ def run_50_point_audit(pptx_path):
                     if r.font.size and r.font.size.pt < 10:
                         failures.append((48, "Sub-Legible Font Size (<10pt)", f"{r.font.size.pt}pt"))
 
-        # 49. Attached Diagram Media Validity
+        # 49. Attached Diagram & Vector Math Graphic Validity
         if len(pictures) > 0:
             for p in pictures:
-                if p.width.inches < 0.5 or p.height.inches < 0.5:
-                    failures.append((49, "Corrupted Diagram Dimensions", f"{p.width.inches:.2f}x{p.height.inches:.2f}"))
+                if p.width.inches < 0.3 or p.height.inches < 0.15:
+                    failures.append((49, "Corrupted Graphic Dimensions", f"{p.width.inches:.2f}x{p.height.inches:.2f}"))
 
         # 50. Non-Empty Presentation Slide Count (>= 30)
         if len(lines) == 0:
@@ -295,5 +310,5 @@ def run_50_point_audit(pptx_path):
     return len(slide_failures)
 
 if __name__ == "__main__":
-    pptx_file = r"d:\Work\kaku\test_output\Quiz_Presentation_30_Slides_Rev94.pptx"
+    pptx_file = r"d:\Work\kaku\test_output\Quiz_Presentation_Final.pptx"
     run_50_point_audit(pptx_file)

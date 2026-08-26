@@ -386,8 +386,8 @@ function formatMathText(str) {
        .replace(/50\s*7\s*m\/s/gi, '50/7 m/s')
        .replace(/\(5\s*t\s*\+\s*π\s*3\s*\)/gi, '(5t + π/3)')
        .replace(/5t\s*cm\b|5tcm\b/gi, '5t cm')
-       .replace(/sin\s*\(\s*5t/gi, 'sin(5t')
        .replace(/subjected\s+two\b/gi, 'subjected to two')
+       .replace(/(motions as:)\s*(x₁\s*=\s*√\s*7[^\n]+?cm)\s*(where\s+x\s+is)/gi, '$1\n$2\n$3')
        .replace(/transverse strain for the wire are 0\.2 and\s+10\s*[−\-]\s*3/gi, 'transverse strain for the wire are 0.2 and 5 × 10⁻³')
        .replace(/elastic potential energy density of the wire is ____\s+×10\s*5/gi, 'elastic potential energy density of the wire is ____ × 10⁵')
        .replace(/slanted object\s+AB/gi, 'slanted object AB')
@@ -736,6 +736,7 @@ function isHeaderOrFooter(text) {
 // Smart Paragraph Reflower: Merges broken PDF line wraps into natural flowing sentences
 function reflowStemParagraphs(stemText) {
   if (!stemText) return '';
+  stemText = stemText.replace(/(motions as:)\s*(x₁\s*=\s*√\s*7[^\n]+?cm)\s*(where\s+x\s+is)/gi, '$1\n$2\n$3');
   const lines = stemText.split('\n').map(l => l.trim()).filter(Boolean);
   if (lines.length <= 1) return stemText;
 
@@ -744,10 +745,11 @@ function reflowStemParagraphs(stemText) {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    const isSpecialItem = /^(?:\([A-Da-d1-4I-Vixv]+\)|[1-4]\.|\•|Statement\s+[I|V|X\d]+|Assertion|Reason|List-[I|V\d]+|Column\s+[I|V\d]+|Choose\s+the\s+correct)/i.test(line);
+    const isSpecialItem = /^(?:\([A-Da-d1-4I-Vixv]+\)|[1-4]\.|\•|Statement\s+[I|V|X\d]+|Assertion|Reason|List-[I|V\d]+|Column\s+[I|V\d]+|Choose\s+the\s+correct|x₁\s*=|where\s+x\s+is)/i.test(line);
     const prevEndsColon = /:\s*$/.test(currentPara);
+    const prevIsFormula = /^(?:x₁\s*=|[A-Za-z]\s*=)/i.test(currentPara);
 
-    if (isSpecialItem || prevEndsColon) {
+    if (isSpecialItem || prevEndsColon || prevIsFormula) {
       result.push(currentPara);
       currentPara = line;
     } else {
@@ -991,29 +993,55 @@ function setupGenerator() {
 
           const botT = diagT + diagH + 0.05;
           const botH = (bTop + bHeight) - botT;
-          const textRunsBot = [];
-
           const botStPt = Math.max(10.5, Math.round(12.5 * fontScaleFactor));
           const botOptPt = Math.max(10, Math.round(12 * fontScaleFactor));
 
-          if (stemLines.length > 1) {
-            textRunsBot.push({ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex, breakLine: true } });
-          }
-
-          for (const k of ['A', 'B', 'C', 'D']) {
-            if (q.options[k]) {
-              textRunsBot.push({ text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex } });
-              textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: 'F5F5F5', breakLine: true } });
+          const hasDiagRadical = ['A', 'B', 'C', 'D'].some(k => q.options[k] && q.options[k].includes('√'));
+          if (hasDiagRadical) {
+            let curDiagOptY = botT;
+            if (stemLines.length > 1) {
+              const subStemH = 0.4;
+              slide.addText([{ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex } }], {
+                x: bLeft, y: curDiagOptY, w: bWidth, h: subStemH, wrap: true, valign: 'top'
+              });
+              curDiagOptY += subStemH + 0.05;
             }
-          }
+            const diagOptSpacing = Math.max(0.42, (botH - 0.2) / 4.2);
+            for (const k of ['A', 'B', 'C', 'D']) {
+              if (q.options[k]) {
+                if (q.options[k].includes('√')) {
+                  const svgOpt = renderMathOptionToSvg(k, q.options[k], botOptPt);
+                  const imgOpt = await svgToPngDataUrl(svgOpt);
+                  slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curDiagOptY, w: imgOpt.widthInches, h: imgOpt.heightInches });
+                } else {
+                  slide.addText([
+                    { text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex } },
+                    { text: q.options[k], options: { fontSize: botOptPt, color: 'F5F5F5' } }
+                  ], { x: bLeft, y: curDiagOptY, w: bWidth, h: diagOptSpacing, wrap: true, valign: 'top' });
+                }
+                curDiagOptY += diagOptSpacing;
+              }
+            }
+          } else {
+            const textRunsBot = [];
+            if (stemLines.length > 1) {
+              textRunsBot.push({ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex, breakLine: true } });
+            }
 
-          // If Inline Answer Mode is selected
-          if (solutionMode === 'inline' && q.solution) {
-            const ansLine = q.solution.split('\n')[0] || '';
-            textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: '81C784' } });
-          }
+            for (const k of ['A', 'B', 'C', 'D']) {
+              if (q.options[k]) {
+                textRunsBot.push({ text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex } });
+                textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: 'F5F5F5', breakLine: true } });
+              }
+            }
 
-          slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
+            if (solutionMode === 'inline' && q.solution) {
+              const ansLine = q.solution.split('\n')[0] || '';
+              textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: '81C784' } });
+            }
+
+            slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
+          }
         }
         // 2. 2x2 Grid Layout for Short Options
         else if (chk2x2Grid.checked && q.options.A && q.options.B && q.options.C && q.options.D && maxOptLen <= 35 && q.question.length <= 260 && stemLines.length === 1) {
@@ -1040,26 +1068,83 @@ function setupGenerator() {
           });
 
           const colW = (bWidth - 0.5) / 2;
-          const topOpts = bTop + stemBoxH + 0.3;
-          const optBoxH = (bTop + bHeight) - topOpts;
+          const col1X = bLeft;
+          const col2X = bLeft + colW + 0.5;
+          const row1Y = bTop + stemBoxH + 0.25;
+          const row2Y = row1Y + 1.25;
 
-          // Col 1 (A & C)
-          slide.addText([
-            { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-            { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
-            { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
-            { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-            { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-          ], { x: bLeft, y: topOpts, w: colW, h: optBoxH, wrap: true, valign: 'top' });
+          const hasRadical = ['A', 'B', 'C', 'D'].some(k => q.options[k] && q.options[k].includes('√'));
+          if (hasRadical) {
+            if (q.options.A) {
+              if (q.options.A.includes('√')) {
+                const svgA = renderMathOptionToSvg("A", q.options.A, gOptPt);
+                const imgA = await svgToPngDataUrl(svgA);
+                slide.addImage({ data: imgA.dataUrl, x: col1X, y: row1Y, w: imgA.widthInches, h: imgA.heightInches });
+              } else {
+                slide.addText([
+                  { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+                  { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+                ], { x: col1X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+              }
+            }
 
-          // Col 2 (B & D)
-          slide.addText([
-            { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-            { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
-            { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
-            { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-            { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-          ], { x: bLeft + colW + 0.5, y: topOpts, w: colW, h: optBoxH, wrap: true, valign: 'top' });
+            if (q.options.C) {
+              if (q.options.C.includes('√')) {
+                const svgC = renderMathOptionToSvg("C", q.options.C, gOptPt);
+                const imgC = await svgToPngDataUrl(svgC);
+                slide.addImage({ data: imgC.dataUrl, x: col1X, y: row2Y, w: imgC.widthInches, h: imgC.heightInches });
+              } else {
+                slide.addText([
+                  { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+                  { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+                ], { x: col1X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+              }
+            }
+
+            if (q.options.B) {
+              if (q.options.B.includes('√')) {
+                const svgB = renderMathOptionToSvg("B", q.options.B, gOptPt);
+                const imgB = await svgToPngDataUrl(svgB);
+                slide.addImage({ data: imgB.dataUrl, x: col2X, y: row1Y, w: imgB.widthInches, h: imgB.heightInches });
+              } else {
+                slide.addText([
+                  { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+                  { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+                ], { x: col2X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+              }
+            }
+
+            if (q.options.D) {
+              if (q.options.D.includes('√')) {
+                const svgD = renderMathOptionToSvg("D", q.options.D, gOptPt);
+                const imgD = await svgToPngDataUrl(svgD);
+                slide.addImage({ data: imgD.dataUrl, x: col2X, y: row2Y, w: imgD.widthInches, h: imgD.heightInches });
+              } else {
+                slide.addText([
+                  { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+                  { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+                ], { x: col2X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+              }
+            }
+          } else {
+            // Col 1 (A & C)
+            slide.addText([
+              { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+              { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
+              { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
+              { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+              { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+            ], { x: col1X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top' });
+
+            // Col 2 (B & D)
+            slide.addText([
+              { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+              { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
+              { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
+              { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
+              { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5' } }
+            ], { x: col2X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top' });
+          }
         }
         // 3. Standard Vertical Layout with Dynamic Typography & Smart Auto-Fit
         else {
@@ -1091,42 +1176,100 @@ function setupGenerator() {
             spPt = Math.max(2, Math.floor(spPt * damp));
           }
 
-          const textRuns = [];
-          if (q.section) {
-            textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
-          }
-          textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
-          textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, breakLine: true } });
+          const hasStemRadical = stemLines.some(l => l.includes('√'));
+          const hasOptRadical = ['A', 'B', 'C', 'D'].some(k => q.options[k] && q.options[k].includes('√'));
+          const hasRadical = hasStemRadical || hasOptRadical;
 
-          for (let i = 1; i < stemLines.length; i++) {
-            const sub = stemLines[i];
-            const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
-            textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, breakLine: true } });
-          }
+          if (hasRadical) {
+            let curContentY = bTop;
 
-          textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
+            for (let i = 0; i < stemLines.length; i++) {
+              const sub = stemLines[i];
+              if (i === 0) {
+                const headerRuns = [];
+                if (q.section) {
+                  headerRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
+                }
+                headerRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
+                headerRuns.push({ text: sub, options: { fontSize: stPt, bold: true, color: colStemHex } });
 
-          for (const k of ['A', 'B', 'C', 'D']) {
-            if (q.options[k]) {
-              textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
-              textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+                const hLines = Math.max(1, Math.ceil((sub.length + 8) / charsPerLine));
+                const lineH = (hLines * stPt * 1.35) / 72 + 0.15;
+                slide.addText(headerRuns, { x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top' });
+                curContentY += lineH + 0.05;
+              } else if (sub.includes('√')) {
+                const svgMath = renderMathOptionToSvg(null, sub, Math.round(stPt * 0.95), '#FFF5B4');
+                const imgMath = await svgToPngDataUrl(svgMath);
+                slide.addImage({ data: imgMath.dataUrl, x: bLeft, y: curContentY, w: imgMath.widthInches, h: imgMath.heightInches });
+                curContentY += imgMath.heightInches + 0.08;
+              } else {
+                const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
+                const subLines = Math.max(1, Math.ceil(sub.length / charsPerLine));
+                const lineH = (subLines * stPt * 1.35 * 0.95) / 72 + 0.1;
+                slide.addText([{ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex } }], {
+                  x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top'
+                });
+                curContentY += lineH + 0.05;
+              }
             }
-          }
 
-          // If Inline Answer Mode is selected
-          if (solutionMode === 'inline' && q.solution) {
-            const ansLine = q.solution.split('\n')[0] || '';
-            textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784' } });
-          }
+            curContentY += 0.1;
+            const remainingH = Math.max(2.0, (bTop + bHeight) - curContentY);
+            const optSpacing = Math.max(0.55, remainingH / 4.2);
 
-          slide.addText(textRuns, {
-            x: bLeft,
-            y: bTop,
-            w: bWidth,
-            h: bHeight,
-            wrap: true,
-            valign: 'top'
-          });
+            for (const k of ['A', 'B', 'C', 'D']) {
+              if (q.options[k]) {
+                if (q.options[k].includes('√')) {
+                  const svgOpt = renderMathOptionToSvg(k, q.options[k], optPt);
+                  const imgOpt = await svgToPngDataUrl(svgOpt);
+                  slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curContentY, w: imgOpt.widthInches, h: imgOpt.heightInches });
+                } else {
+                  slide.addText([
+                    { text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } },
+                    { text: q.options[k], options: { fontSize: optPt, color: 'F5F5F5' } }
+                  ], { x: bLeft, y: curContentY, w: bWidth, h: optSpacing, wrap: true, valign: 'top' });
+                }
+                curContentY += optSpacing;
+              }
+            }
+          } else {
+            const textRuns = [];
+            if (q.section) {
+              textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
+            }
+            textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
+            textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, breakLine: true } });
+
+            for (let i = 1; i < stemLines.length; i++) {
+              const sub = stemLines[i];
+              const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
+              textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, breakLine: true } });
+            }
+
+            textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
+
+            for (const k of ['A', 'B', 'C', 'D']) {
+              if (q.options[k]) {
+                textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
+                textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+              }
+            }
+
+            // If Inline Answer Mode is selected
+            if (solutionMode === 'inline' && q.solution) {
+              const ansLine = q.solution.split('\n')[0] || '';
+              textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784' } });
+            }
+
+            slide.addText(textRuns, {
+              x: bLeft,
+              y: bTop,
+              w: bWidth,
+              h: bHeight,
+              wrap: true,
+              valign: 'top'
+            });
+          }
         }
 
         // 4. If Separate Solution Slide Mode is selected
@@ -1244,4 +1387,108 @@ function downloadBlobDirectly(blob, filename) {
 function escapeHtml(text) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
   return (text || '').replace(/[&<>"']/g, m => map[m]);
+}
+
+// 2D Vector Mathematical Equation SVG & PNG Converter
+async function svgToPngDataUrl(svgString, scale = 3) {
+  return new Promise((resolve, reject) => {
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const URL = window.URL || window.webkitURL || window;
+    const blobURL = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(blobURL);
+      resolve({
+        dataUrl: canvas.toDataURL('image/png'),
+        widthInches: img.width / 96,
+        heightInches: img.height / 96
+      });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(blobURL);
+      reject(new Error('SVG rendering failed'));
+    };
+    img.src = blobURL;
+  });
+}
+
+function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor = "#F5F5F5") {
+  if (!optText || !optText.includes('√')) return null;
+
+  const height = Math.round(fontSize * 1.85);
+  const scale = fontSize / 24;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" height="${height}" font-family="Plus Jakarta Sans, sans-serif" font-size="${fontSize}px">`;
+  let curX = 4;
+  const baselineY = Math.round(fontSize * 1.30);
+
+  if (optLetter) {
+    const lbl = `(${optLetter}) `;
+    svg += `<text x="${curX}" y="${baselineY}" fill="#FFD700" font-weight="bold">${lbl}</text>`;
+    curX += lbl.length * fontSize * 0.54;
+  }
+
+  const regex = /(√\s*\d+|√\[[^\]]+\])/g;
+  const parts = optText.split(regex);
+
+  for (const part of parts) {
+    if (!part) continue;
+
+    const radMatch = part.match(/^√\s*(\d+)$/);
+    const radBracketMatch = part.match(/^√\[([^\]]+)\]$/);
+
+    if (radMatch || radBracketMatch) {
+      const radicand = radMatch ? radMatch[1] : radBracketMatch[1];
+      const radStartX = curX;
+      const radBottomY = baselineY + 3 * scale;
+      // Elevated Top Bar with comfortable clearance (0.95 * fontSize above baseline)
+      const radTopY = baselineY - (fontSize * 0.95);
+      const radEndX = radStartX + 11 * scale;
+      const radicandWidth = radicand.length * (fontSize * 0.58);
+      const barEndX = radEndX + radicandWidth + 5 * scale;
+
+      const pathD = `M ${radStartX} ${baselineY - 4 * scale} ` +
+                    `L ${radStartX + 4 * scale} ${radBottomY} ` +
+                    `L ${radEndX} ${radTopY} ` +
+                    `H ${barEndX}`;
+      svg += `<path d="${pathD}" fill="none" stroke="${defaultColor}" stroke-width="${Math.max(2, Math.round(2 * scale))}" stroke-linecap="square" stroke-linejoin="miter"/>`;
+      svg += `<text x="${radEndX + 3.0 * scale}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${radicand}</text>`;
+      curX = barEndX + 3 * scale;
+    } else {
+      let subParts = part.split(/(⁻¹|⁻²|²⁺|⁺|₁|₂|₀|ₜ|ᵣ|π)/g);
+      for (const sp of subParts) {
+        if (!sp) continue;
+        if (sp === '⁻¹' || sp === '⁻²') {
+          const supY = baselineY - (fontSize * 0.45);
+          svg += `<text x="${curX}" y="${supY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">${sp === '⁻¹' ? '-1' : '-2'}</text>`;
+          curX += 16 * scale;
+        } else if (sp === '²⁺') {
+          const supY = baselineY - (fontSize * 0.45);
+          svg += `<text x="${curX}" y="${supY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">2+</text>`;
+          curX += 20 * scale;
+        } else if (sp === '₁') {
+          const subY = baselineY + (fontSize * 0.25);
+          svg += `<text x="${curX}" y="${subY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">1</text>`;
+          curX += 12 * scale;
+        } else if (sp === '₂') {
+          const subY = baselineY + (fontSize * 0.25);
+          svg += `<text x="${curX}" y="${subY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">2</text>`;
+          curX += 12 * scale;
+        } else {
+          svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${sp}</text>`;
+          curX += sp.length * (fontSize * 0.56);
+        }
+      }
+    }
+  }
+
+  const totalWidth = Math.ceil(curX + 8);
+  return svg.replace('<svg xmlns="http://www.w3.org/2000/svg"', `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" viewBox="0 0 ${totalWidth} ${height}"`) + '</svg>';
 }

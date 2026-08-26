@@ -12,7 +12,7 @@ import pptx
 
 pdf_path = r"C:\Users\Lenovo\.gemini\antigravity\brain\8ad26341-31c8-489f-8b94-35a6e7a0c5aa\.user_uploaded\media_1787675766400.pdf"
 html_path = r"d:\Work\kaku\pdf_quiz_gh_pages\index.html"
-output_pptx = r"d:\Work\kaku\test_output\Quiz_Presentation_30_Slides_Rev94.pptx"
+output_pptx = r"d:\Work\kaku\test_output\Quiz_Presentation_Release.pptx"
 
 chrome_options = Options()
 chrome_options.add_argument("--headless=new")
@@ -103,7 +103,20 @@ print(f"Total Slides: {len(prs.slides)}")
 
 for idx, s in enumerate(prs.slides, 1):
     images = [sp for sp in s.shapes if sp.shape_type == pptx.enum.shapes.MSO_SHAPE_TYPE.PICTURE]
-    texts = [sp.text_frame.text for sp in s.shapes if sp.has_text_frame]
+    texts = []
+    for sp in s.shapes:
+        if sp.has_text_frame:
+            p_texts = []
+            for p in sp._element.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}p'):
+                t_nodes = p.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}t')
+                if t_nodes:
+                    p_texts.append("".join(t.text for t in t_nodes if t.text))
+                else:
+                    m_nodes = p.findall('.//{http://schemas.openxmlformats.org/officeDocument/2006/math}t')
+                    if m_nodes:
+                        p_texts.append("".join(m.text for m in m_nodes if m.text))
+            if p_texts:
+                texts.append("\n".join(p_texts))
     print(f"\n--- SLIDE {idx} (Images: {len(images)}) ---")
     for t in texts:
         print(t)
