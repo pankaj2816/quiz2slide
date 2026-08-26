@@ -460,22 +460,21 @@ function cleanOptionText(optRaw) {
        .replace(/tan\s*[-−]?\s*1/gi, 'tan⁻¹');
 
   // 1. Inverse trig fractions (e.g. cos⁻¹(1/√3̅), cos⁻¹(2/3), cos⁻¹(√2̅/3))
-  s = s.replace(/(?:\(√\s*(\d+)\s*\)\s*cos⁻¹\s*(\d+)|cos⁻¹\s*\(?\s*√\s*(\d+)\s*\)?\s*(\d+))/gi, (m, g1, g2, g3, g4) => {
-    const num = g1 || g3;
-    const den = g2 || g4;
-    return `cos⁻¹(√${num}/${den})`;
-  });
-
-  s = s.replace(/cos⁻¹\s*\(\s*1\s*\/\s*√?\s*3\s*\)/gi, 'cos⁻¹(1/√3\u0305)')
-       .replace(/cos⁻¹\s*\(\s*√\s*2\s*\/\s*3\s*\)/gi, 'cos⁻¹(√2\u0305/3)')
-       .replace(/cos⁻¹\s*\(\s*2\s*\/\s*3\s*\)/gi, 'cos⁻¹(2/3)')
-       .replace(/cos⁻¹\s*\(\s*1\s*\/\s*3\s*\)/gi, 'cos⁻¹(1/3)')
+  s = s.replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*√?\s*3[̅\u0305]?\s*\)?/gi, 'cos⁻¹(1/√3\u0305)')
+       .replace(/cos⁻¹\s*\(?\s*√\s*2[̅\u0305]?\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(√2\u0305/3)')
+       .replace(/cos⁻¹\s*\(?\s*2\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(2/3)')
+       .replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(1/3)')
+       .replace(/(?:\(√\s*(\d+)\s*\)\s*cos⁻¹\s*(\d+)|cos⁻¹\s*\(?\s*√\s*(\d+)\s*\)?\s*(\d+))/gi, (m, g1, g2, g3, g4) => {
+         const num = g1 || g3;
+         const den = g2 || g4;
+         return `cos⁻¹(√${num}\u0305/${den})`;
+       })
        .replace(/cos⁻¹\s*\(\s*(\d+)\s*\)\s*([^\s\)]+)/gi, 'cos⁻¹($1/$2)')
-       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\)\s*([^\s\)]+)/gi, 'cos⁻¹(√$1/$2)')
+       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\)\s*([^\s\)]+)/gi, 'cos⁻¹(√$1\u0305/$2)')
        .replace(/cos⁻¹\s*\(\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
-       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)')
+       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1\u0305/$2)')
        .replace(/cos⁻¹\s*\(\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
-       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)');
+       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1\u0305/$2)');
 
   // 2. Susceptibility relations
   s = s.replace(/χ\s*=\s*μ\s*μ[0₀]\s*[-−]\s*1/gi, 'χ = (μ/μ₀) − 1')
