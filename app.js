@@ -459,8 +459,8 @@ function cleanOptionText(optRaw) {
        .replace(/sin\s*[-−]?\s*1/gi, 'sin⁻¹')
        .replace(/tan\s*[-−]?\s*1/gi, 'tan⁻¹');
 
-  // 1. Inverse trig fractions (e.g. cos⁻¹(1/√3̅), cos⁻¹(2/3), cos⁻¹(√2̅/3))
-  s = s.replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*√?\s*3[̅\u0305]?\s*\)?/gi, 'cos⁻¹(1/√3\u0305)')
+  // 1. Inverse trig fractions (e.g. cos⁻¹(1/√3̅), cos⁻¹(2/3), cos⁻¹(1/3), cos⁻¹(√2̅/3))
+  s = s.replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*√\s*3[̅\u0305]?\s*\)?/gi, 'cos⁻¹(1/√3\u0305)')
        .replace(/cos⁻¹\s*\(?\s*√\s*2[̅\u0305]?\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(√2\u0305/3)')
        .replace(/cos⁻¹\s*\(?\s*2\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(2/3)')
        .replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(1/3)')
