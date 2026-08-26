@@ -397,7 +397,7 @@ function formatMathText(str) {
        .replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[$1m(hc/λ − ϕ)] / eB')
        .replace(/2\s*√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[m(hc/λ − ϕ)] / eB')
        .replace(/√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[m(hc/λ − ϕ)] / eB')
-       .replace(/√\s*(\d+)(?!\s*m\s*[\(\[])/g, (m, digits) => '√' + digits.split('').map(d => d + '\u0305').join(''))
+       .replace(/√\s*(\d+)[̅\u0305]?/g, '√$1')
        .replace(/'\s*([αxσOMF])\s*'/gi, "'$1'");
 
   // Physics Variables with Subscripts
@@ -459,22 +459,22 @@ function cleanOptionText(optRaw) {
        .replace(/sin\s*[-−]?\s*1/gi, 'sin⁻¹')
        .replace(/tan\s*[-−]?\s*1/gi, 'tan⁻¹');
 
-  // 1. Inverse trig fractions (e.g. cos⁻¹(1/√3̅), cos⁻¹(2/3), cos⁻¹(1/3), cos⁻¹(√2̅/3))
-  s = s.replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*√\s*3[̅\u0305]?\s*\)?/gi, 'cos⁻¹(1/√3\u0305)')
-       .replace(/cos⁻¹\s*\(?\s*√\s*2[̅\u0305]?\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(√2\u0305/3)')
+  // 1. Inverse trig fractions (e.g. cos⁻¹(1/√3), cos⁻¹(2/3), cos⁻¹(1/3), cos⁻¹(√2/3))
+  s = s.replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*√\s*3[̅\u0305]?\s*\)?/gi, 'cos⁻¹(1/√3)')
+       .replace(/cos⁻¹\s*\(?\s*√\s*2[̅\u0305]?\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(√2/3)')
        .replace(/cos⁻¹\s*\(?\s*2\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(2/3)')
        .replace(/cos⁻¹\s*\(?\s*1\s*[\/\s]\s*3\s*\)?/gi, 'cos⁻¹(1/3)')
        .replace(/(?:\(√\s*(\d+)\s*\)\s*cos⁻¹\s*(\d+)|cos⁻¹\s*\(?\s*√\s*(\d+)\s*\)?\s*(\d+))/gi, (m, g1, g2, g3, g4) => {
          const num = g1 || g3;
          const den = g2 || g4;
-         return `cos⁻¹(√${num}\u0305/${den})`;
+         return `cos⁻¹(√${num}/${den})`;
        })
        .replace(/cos⁻¹\s*\(\s*(\d+)\s*\)\s*([^\s\)]+)/gi, 'cos⁻¹($1/$2)')
-       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\)\s*([^\s\)]+)/gi, 'cos⁻¹(√$1\u0305/$2)')
+       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\)\s*([^\s\)]+)/gi, 'cos⁻¹(√$1/$2)')
        .replace(/cos⁻¹\s*\(\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
-       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1\u0305/$2)')
+       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s*\/\s*([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)')
        .replace(/cos⁻¹\s*\(\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹($1/$2)')
-       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1\u0305/$2)');
+       .replace(/cos⁻¹\s*\(\s*√\s*(\d+)\s+([^\)\s]+)\s*\)/gi, 'cos⁻¹(√$1/$2)');
 
   // 2. Susceptibility relations
   s = s.replace(/χ\s*=\s*μ\s*μ[0₀]\s*[-−]\s*1/gi, 'χ = (μ/μ₀) − 1')
