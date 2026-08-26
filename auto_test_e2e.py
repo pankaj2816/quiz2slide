@@ -12,7 +12,7 @@ import pptx
 
 pdf_path = r"C:\Users\Lenovo\.gemini\antigravity\brain\8ad26341-31c8-489f-8b94-35a6e7a0c5aa\.user_uploaded\media_1787675766400.pdf"
 html_path = r"d:\Work\kaku\pdf_quiz_gh_pages\index.html"
-output_pptx = r"d:\Work\kaku\test_output\Quiz_Presentation_30_Slides_Rev92.pptx"
+output_pptx = r"d:\Work\kaku\test_output\Quiz_Presentation_30_Slides_Rev93.pptx"
 
 chrome_options = Options()
 chrome_options.add_argument("--headless=new")
