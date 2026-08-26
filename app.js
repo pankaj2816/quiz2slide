@@ -391,7 +391,13 @@ function formatMathText(str) {
        .replace(/\+9\s+q\b/g, '+9q')
        .replace(/\+10\s*μ\s*C\b/gi, '+10 μC')
        .replace(/μ\s+m\b/gi, 'μm')
-       .replace(/√\s*(\d+)/g, (m, digits) => '√' + digits.split('').map(d => d + '\u0305').join(''))
+       .replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[$1m(hc/λ − ϕ)] / eB')
+       .replace(/√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[m(hc/λ − ϕ)] / eB')
+       .replace(/2\s*√\s*m\s*\(\s*hc\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[m(hc/λ − ϕ)] / eB')
+       .replace(/√\s*(\d+)\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[$1m(hc/λ − ϕ)] / eB')
+       .replace(/2\s*√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '2√[m(hc/λ − ϕ)] / eB')
+       .replace(/√\s*m\s*\(\s*hc\s*λ?\s*[-−]\s*ϕ\s*\)\s*\/eB\s*λ?/gi, '√[m(hc/λ − ϕ)] / eB')
+       .replace(/√\s*(\d+)(?!\s*m\s*[\(\[])/g, (m, digits) => '√' + digits.split('').map(d => d + '\u0305').join(''))
        .replace(/'\s*([αxσOMF])\s*'/gi, "'$1'");
 
   // Physics Variables with Subscripts
