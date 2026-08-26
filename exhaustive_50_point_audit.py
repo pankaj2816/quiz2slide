@@ -310,5 +310,6 @@ def run_50_point_audit(pptx_path):
     return len(slide_failures)
 
 if __name__ == "__main__":
-    pptx_file = r"d:\Work\kaku\test_output\Quiz_Presentation_Final.pptx"
+    import sys
+    pptx_file = sys.argv[1] if len(sys.argv) > 1 else r"d:\Work\kaku\test_output\Quiz_Presentation_Release.pptx"
     run_50_point_audit(pptx_file)

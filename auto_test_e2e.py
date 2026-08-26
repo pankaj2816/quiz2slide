@@ -88,8 +88,13 @@ try:
     # Save to disk
     header, b64_str = b64_data.split(',', 1)
     pptx_bytes = base64.b64decode(b64_str)
-    with open(output_pptx, 'wb') as f:
-        f.write(pptx_bytes)
+    try:
+        with open(output_pptx, 'wb') as f:
+            f.write(pptx_bytes)
+    except PermissionError:
+        output_pptx = r"d:\Work\kaku\test_output\Quiz_Presentation_Latest.pptx"
+        with open(output_pptx, 'wb') as f:
+            f.write(pptx_bytes)
 
     print(f"Successfully generated and saved: {output_pptx} ({len(pptx_bytes)} bytes)\n")
 

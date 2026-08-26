@@ -388,6 +388,7 @@ function formatMathText(str) {
        .replace(/5t\s*cm\b|5tcm\b/gi, '5t cm')
        .replace(/subjected\s+two\b/gi, 'subjected to two')
        .replace(/(motions as:)\s*(x₁\s*=\s*√\s*7[^\n]+?cm)\s*(where\s+x\s+is)/gi, '$1\n$2\n$3')
+       .replace(/(given by:?)\s*(\(P\s*\+\s*a\/V²\)[^\n]*?(?:= RT[,\.]?))\s*(where\s+P)/gi, '$1\n$2\n$3')
        .replace(/transverse strain for the wire are 0\.2 and\s+10\s*[−\-]\s*3/gi, 'transverse strain for the wire are 0.2 and 5 × 10⁻³')
        .replace(/elastic potential energy density of the wire is ____\s+×10\s*5/gi, 'elastic potential energy density of the wire is ____ × 10⁵')
        .replace(/slanted object\s+AB/gi, 'slanted object AB')
@@ -736,7 +737,8 @@ function isHeaderOrFooter(text) {
 // Smart Paragraph Reflower: Merges broken PDF line wraps into natural flowing sentences
 function reflowStemParagraphs(stemText) {
   if (!stemText) return '';
-  stemText = stemText.replace(/(motions as:)\s*(x₁\s*=\s*√\s*7[^\n]+?cm)\s*(where\s+x\s+is)/gi, '$1\n$2\n$3');
+  stemText = stemText.replace(/(motions as:)\s*(x₁\s*=\s*√\s*7[^\n]+?cm)\s*(where\s+x\s+is)/gi, '$1\n$2\n$3')
+                     .replace(/(given by:?)\s*(\(P\s*\+\s*a\/V²\)[^\n]*?(?:= RT[,\.]?))\s*(where\s+P)/gi, '$1\n$2\n$3');
   const lines = stemText.split('\n').map(l => l.trim()).filter(Boolean);
   if (lines.length <= 1) return stemText;
 
@@ -745,9 +747,9 @@ function reflowStemParagraphs(stemText) {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    const isSpecialItem = /^(?:\([A-Da-d1-4I-Vixv]+\)|[1-4]\.|\•|Statement\s+[I|V|X\d]+|Assertion|Reason|List-[I|V\d]+|Column\s+[I|V\d]+|Choose\s+the\s+correct|x₁\s*=|where\s+x\s+is)/i.test(line);
+    const isSpecialItem = /^(?:\([A-Da-d1-4I-Vixv]+\)|[1-4]\.|\•|Statement\s+[I|V|X\d]+|Assertion|Reason|List-[I|V\d]+|Column\s+[I|V\d]+|Choose\s+the\s+correct|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
     const prevEndsColon = /:\s*$/.test(currentPara);
-    const prevIsFormula = /^(?:x₁\s*=|[A-Za-z]\s*=)/i.test(currentPara);
+    const prevIsFormula = /^(?:x₁\s*=|(?:\([A-Za-z0-9_\s\+\/²]+\)))/i.test(currentPara);
 
     if (isSpecialItem || prevEndsColon || prevIsFormula) {
       result.push(currentPara);
@@ -996,8 +998,8 @@ function setupGenerator() {
           const botStPt = Math.max(10.5, Math.round(12.5 * fontScaleFactor));
           const botOptPt = Math.max(10, Math.round(12 * fontScaleFactor));
 
-          const hasDiagRadical = ['A', 'B', 'C', 'D'].some(k => q.options[k] && q.options[k].includes('√'));
-          if (hasDiagRadical) {
+          const hasDiagMath = ['A', 'B', 'C', 'D'].some(k => q.options[k] && isMathExpression(q.options[k]));
+          if (hasDiagMath) {
             let curDiagOptY = botT;
             if (stemLines.length > 1) {
               const subStemH = 0.4;
@@ -1009,7 +1011,7 @@ function setupGenerator() {
             const diagOptSpacing = Math.max(0.42, (botH - 0.2) / 4.2);
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
-                if (q.options[k].includes('√')) {
+                if (isMathExpression(q.options[k])) {
                   const svgOpt = renderMathOptionToSvg(k, q.options[k], botOptPt);
                   const imgOpt = await svgToPngDataUrl(svgOpt);
                   slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curDiagOptY, w: imgOpt.widthInches, h: imgOpt.heightInches });
@@ -1073,10 +1075,10 @@ function setupGenerator() {
           const row1Y = bTop + stemBoxH + 0.25;
           const row2Y = row1Y + 1.25;
 
-          const hasRadical = ['A', 'B', 'C', 'D'].some(k => q.options[k] && q.options[k].includes('√'));
-          if (hasRadical) {
+          const hasMath = ['A', 'B', 'C', 'D'].some(k => q.options[k] && isMathExpression(q.options[k]));
+          if (hasMath) {
             if (q.options.A) {
-              if (q.options.A.includes('√')) {
+              if (isMathExpression(q.options.A)) {
                 const svgA = renderMathOptionToSvg("A", q.options.A, gOptPt);
                 const imgA = await svgToPngDataUrl(svgA);
                 slide.addImage({ data: imgA.dataUrl, x: col1X, y: row1Y, w: imgA.widthInches, h: imgA.heightInches });
@@ -1089,7 +1091,7 @@ function setupGenerator() {
             }
 
             if (q.options.C) {
-              if (q.options.C.includes('√')) {
+              if (isMathExpression(q.options.C)) {
                 const svgC = renderMathOptionToSvg("C", q.options.C, gOptPt);
                 const imgC = await svgToPngDataUrl(svgC);
                 slide.addImage({ data: imgC.dataUrl, x: col1X, y: row2Y, w: imgC.widthInches, h: imgC.heightInches });
@@ -1102,7 +1104,7 @@ function setupGenerator() {
             }
 
             if (q.options.B) {
-              if (q.options.B.includes('√')) {
+              if (isMathExpression(q.options.B)) {
                 const svgB = renderMathOptionToSvg("B", q.options.B, gOptPt);
                 const imgB = await svgToPngDataUrl(svgB);
                 slide.addImage({ data: imgB.dataUrl, x: col2X, y: row1Y, w: imgB.widthInches, h: imgB.heightInches });
@@ -1115,7 +1117,7 @@ function setupGenerator() {
             }
 
             if (q.options.D) {
-              if (q.options.D.includes('√')) {
+              if (isMathExpression(q.options.D)) {
                 const svgD = renderMathOptionToSvg("D", q.options.D, gOptPt);
                 const imgD = await svgToPngDataUrl(svgD);
                 slide.addImage({ data: imgD.dataUrl, x: col2X, y: row2Y, w: imgD.widthInches, h: imgD.heightInches });
@@ -1176,11 +1178,11 @@ function setupGenerator() {
             spPt = Math.max(2, Math.floor(spPt * damp));
           }
 
-          const hasStemRadical = stemLines.some(l => l.includes('√'));
-          const hasOptRadical = ['A', 'B', 'C', 'D'].some(k => q.options[k] && q.options[k].includes('√'));
-          const hasRadical = hasStemRadical || hasOptRadical;
+          const hasStemMath = stemLines.some(l => isMathExpression(l));
+          const hasOptMath = ['A', 'B', 'C', 'D'].some(k => q.options[k] && isMathExpression(q.options[k]));
+          const hasMath = hasStemMath || hasOptMath;
 
-          if (hasRadical) {
+          if (hasMath) {
             let curContentY = bTop;
 
             for (let i = 0; i < stemLines.length; i++) {
@@ -1197,7 +1199,7 @@ function setupGenerator() {
                 const lineH = (hLines * stPt * 1.35) / 72 + 0.15;
                 slide.addText(headerRuns, { x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top' });
                 curContentY += lineH + 0.05;
-              } else if (sub.includes('√')) {
+              } else if (isMathExpression(sub)) {
                 const svgMath = renderMathOptionToSvg(null, sub, Math.round(stPt * 0.95), '#FFF5B4');
                 const imgMath = await svgToPngDataUrl(svgMath);
                 slide.addImage({ data: imgMath.dataUrl, x: bLeft, y: curContentY, w: imgMath.widthInches, h: imgMath.heightInches });
@@ -1219,7 +1221,7 @@ function setupGenerator() {
 
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
-                if (q.options[k].includes('√')) {
+                if (isMathExpression(q.options[k])) {
                   const svgOpt = renderMathOptionToSvg(k, q.options[k], optPt);
                   const imgOpt = await svgToPngDataUrl(svgOpt);
                   slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curContentY, w: imgOpt.widthInches, h: imgOpt.heightInches });
@@ -1420,14 +1422,27 @@ async function svgToPngDataUrl(svgString, scale = 3) {
   });
 }
 
-function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor = "#F5F5F5") {
-  if (!optText || !optText.includes('√')) return null;
+function isMathExpression(text) {
+  if (!text) return false;
+  if (text.includes('√')) return true;
+  if (/(?:cos⁻¹|sin⁻¹|tan⁻¹)\s*\([^\)]+\/[^\)]+\)/i.test(text)) return true;
+  if (/^\s*[−\-]?\s*[α-ωΑ-Ωa-zA-Z0-9_]+\s*\/\s*[α-ωΑ-Ωa-zA-Z0-9_ϵ₀μᵣ]+\s*$/i.test(text)) return true;
+  if (/^\(\s*[^\/]+\/[^,]+,\s*[^,]+,\s*[^)]+\)$/.test(text)) return true;
+  if (/^[χx]\s*=\s*(?:\([^/]+\/[^)]+\)|1|\d+)\s*[−\-\+]\s*(?:\([^/]+\/[^)]+\)|1|\d+)$/i.test(text)) return true;
+  if (/^\(\s*[^/]+?\s*[+\-−]\s*[^/]+?\s*\/\s*[^)]+?\s*\)/.test(text)) return true;
+  if (/\/\s*eB\b/.test(text)) return true;
+  return false;
+}
 
-  const height = Math.round(fontSize * 1.85);
+function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor = "#F5F5F5") {
+  if (!optText) return null;
+
+  const height = Math.round(fontSize * 3.0); // generous height for stacked fraction
   const scale = fontSize / 24;
+  const baselineY = Math.round(fontSize * 1.60);
+
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" height="${height}" font-family="Plus Jakarta Sans, sans-serif" font-size="${fontSize}px">`;
   let curX = 4;
-  const baselineY = Math.round(fontSize * 1.30);
 
   if (optLetter) {
     const lbl = `(${optLetter}) `;
@@ -1435,58 +1450,219 @@ function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor =
     curX += lbl.length * fontSize * 0.54;
   }
 
-  const regex = /(√\s*\d+|√\[[^\]]+\])/g;
-  const parts = optText.split(regex);
+  function renderSubToken(token, x, y, fSize, color) {
+    let tSvg = '';
+    let w = 0;
+    const fScale = fSize / 24;
 
-  for (const part of parts) {
-    if (!part) continue;
+    if (token.startsWith('√')) {
+      const radicand = token.replace(/^√\s*/, '').replace(/[\[\]]/g, '');
+      const rWidth = radicand.length * (fSize * 0.58);
+      const totalRadW = 11 * fScale + rWidth + 5 * fScale;
+      w = totalRadW;
 
-    const radMatch = part.match(/^√\s*(\d+)$/);
-    const radBracketMatch = part.match(/^√\[([^\]]+)\]$/);
+      const radStartX = x;
+      const radBottomY = y + 2.5 * fScale;
+      const radTopY = y - (fSize * 0.95);
+      const radEndX = radStartX + 10 * fScale;
+      const barEndX = radEndX + rWidth + 4 * fScale;
 
-    if (radMatch || radBracketMatch) {
-      const radicand = radMatch ? radMatch[1] : radBracketMatch[1];
-      const radStartX = curX;
-      const radBottomY = baselineY + 3 * scale;
-      // Elevated Top Bar with comfortable clearance (0.95 * fontSize above baseline)
-      const radTopY = baselineY - (fontSize * 0.95);
-      const radEndX = radStartX + 11 * scale;
-      const radicandWidth = radicand.length * (fontSize * 0.58);
-      const barEndX = radEndX + radicandWidth + 5 * scale;
-
-      const pathD = `M ${radStartX} ${baselineY - 4 * scale} ` +
-                    `L ${radStartX + 4 * scale} ${radBottomY} ` +
-                    `L ${radEndX} ${radTopY} ` +
-                    `H ${barEndX}`;
-      svg += `<path d="${pathD}" fill="none" stroke="${defaultColor}" stroke-width="${Math.max(2, Math.round(2 * scale))}" stroke-linecap="square" stroke-linejoin="miter"/>`;
-      svg += `<text x="${radEndX + 3.0 * scale}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${radicand}</text>`;
-      curX = barEndX + 3 * scale;
+      const pathD = `M ${radStartX} ${y - 3 * fScale} L ${radStartX + 3 * fScale} ${radBottomY} L ${radEndX} ${radTopY} H ${barEndX}`;
+      tSvg = `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="${Math.max(1.8, Math.round(1.8 * fScale))}" stroke-linecap="square"/>` +
+             `<text x="${radEndX + 2.5 * fScale}" y="${y}" font-size="${fSize}px" fill="${color}" font-weight="600">${radicand}</text>`;
     } else {
-      let subParts = part.split(/(⁻¹|⁻²|²⁺|⁺|₁|₂|₀|ₜ|ᵣ|π)/g);
-      for (const sp of subParts) {
+      let subParts = token.split(/(⁻¹|⁻²|²⁺|⁺|₁|₂|₀|ₜ|ᵣ|π|²|³)/g);
+      let px = x;
+      for (let i = 0; i < subParts.length; i++) {
+        const sp = subParts[i];
         if (!sp) continue;
+        const isSup = sp === '⁻¹' || sp === '⁻²' || sp === '²' || sp === '³' || sp === '²⁺' || sp === '⁺';
+        const isSub = sp === '₁' || sp === '₂' || sp === '₀' || sp === 'ₜ' || sp === 'ᵣ';
+
+        // Add comfortable horizontal spacing before superscript so it never touches the preceding character (like V, x, m)
+        if (isSup && i > 0) {
+          px += 4.5 * fScale;
+        }
+
         if (sp === '⁻¹' || sp === '⁻²') {
-          const supY = baselineY - (fontSize * 0.45);
-          svg += `<text x="${curX}" y="${supY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">${sp === '⁻¹' ? '-1' : '-2'}</text>`;
-          curX += 16 * scale;
+          const supY = y - (fSize * 0.40);
+          tSvg += `<text x="${px}" y="${supY}" font-size="${Math.round(fSize * 0.72)}px" fill="${color}" font-weight="bold">${sp === '⁻¹' ? '-1' : '-2'}</text>`;
+          px += 16 * fScale;
+        } else if (sp === '²' || sp === '³') {
+          const supY = y - (fSize * 0.38);
+          tSvg += `<text x="${px}" y="${supY}" font-size="${Math.round(fSize * 0.72)}px" fill="${color}" font-weight="bold">${sp === '²' ? '2' : '3'}</text>`;
+          px += 14 * fScale;
         } else if (sp === '²⁺') {
-          const supY = baselineY - (fontSize * 0.45);
-          svg += `<text x="${curX}" y="${supY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">2+</text>`;
-          curX += 20 * scale;
-        } else if (sp === '₁') {
-          const subY = baselineY + (fontSize * 0.25);
-          svg += `<text x="${curX}" y="${subY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">1</text>`;
-          curX += 12 * scale;
-        } else if (sp === '₂') {
-          const subY = baselineY + (fontSize * 0.25);
-          svg += `<text x="${curX}" y="${subY}" font-size="${Math.round(fontSize * 0.65)}px" fill="${defaultColor}" font-weight="bold">2</text>`;
-          curX += 12 * scale;
+          const supY = y - (fSize * 0.40);
+          tSvg += `<text x="${px}" y="${supY}" font-size="${Math.round(fSize * 0.72)}px" fill="${color}" font-weight="bold">2+</text>`;
+          px += 22 * fScale;
+        } else if (isSub) {
+          if (i > 0) px += 1 * fScale;
+          const subY = y + (fSize * 0.22);
+          const digit = sp === '₁' ? '1' : sp === '₂' ? '2' : sp === '₀' ? '0' : sp === 'ᵣ' ? 'r' : 't';
+          tSvg += `<text x="${px}" y="${subY}" font-size="${Math.round(fSize * 0.72)}px" fill="${color}" font-weight="bold">${digit}</text>`;
+          px += 12 * fScale;
         } else {
-          svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${sp}</text>`;
-          curX += sp.length * (fontSize * 0.56);
+          // Special width for wide characters like 'V', 'W', 'T', 'Y', 'M'
+          let extraW = 0;
+          for (const char of sp) {
+            if (/[VWTYM]/.test(char)) extraW += 0.12 * fSize;
+          }
+          tSvg += `<text x="${px}" y="${y}" font-size="${fSize}px" fill="${color}" font-weight="600">${sp}</text>`;
+          px += sp.length * (fSize * 0.58) + extraW;
         }
       }
+      w = px - x;
     }
+    return { svg: tSvg, width: w };
+  }
+
+  function renderFraction(startX, baselineY, numStr, denStr, fSize, color) {
+    const fracFSize = Math.round(fSize * 0.88);
+    const fracBarY = baselineY - Math.round(fSize * 0.25);
+    const numY = fracBarY - Math.round(fSize * 0.35);
+    const denY = fracBarY + Math.round(fSize * 0.95);
+
+    const numRes = renderSubToken(numStr.trim(), 0, numY, fracFSize, color);
+    const denRes = renderSubToken(denStr.trim(), 0, denY, fracFSize, color);
+
+    const fracW = Math.max(numRes.width, denRes.width) + 12 * scale;
+    const numOffsetX = startX + (fracW - numRes.width) / 2;
+    const denOffsetX = startX + (fracW - denRes.width) / 2;
+
+    const finalNumRes = renderSubToken(numStr.trim(), numOffsetX, numY, fracFSize, color);
+    const finalDenRes = renderSubToken(denStr.trim(), denOffsetX, denY, fracFSize, color);
+
+    const barSvg = `<line x1="${startX}" y1="${fracBarY}" x2="${startX + fracW}" y2="${fracBarY}" stroke="${color}" stroke-width="${Math.max(2, Math.round(2 * scale))}"/>`;
+
+    return {
+      svg: barSvg + finalNumRes.svg + finalDenRes.svg,
+      width: fracW
+    };
+  }
+
+  const trigFrac = optText.match(/^(cos⁻¹|sin⁻¹|tan⁻¹)\s*\(\s*([^/]+)\s*\/\s*([^)]+)\s*\)$/);
+  const coordFrac = optText.match(/^\(\s*([^/]+)\s*\/\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)$/);
+  const eqFrac1 = optText.match(/^([χx])\s*=\s*\(\s*([^/]+)\s*\/\s*([^)]+)\s*\)\s*([−\-\+])\s*(.+)$/);
+  const eqFrac2 = optText.match(/^([χx])\s*=\s*(.+?)\s*([−\-\+])\s*\(\s*([^/]+)\s*\/\s*([^)]+)\s*\)$/);
+  const parenFrac = optText.match(/^\(\s*([^/]+?)\s*([+\-−])\s*([^/]+?)\s*\/\s*([^)]+?)\s*\)\s*(.*)$/);
+  const standaloneFrac = optText.match(/^([−\-]?)(\s*[^\/]+?)\s*\/\s*(.+)$/);
+
+  if (parenFrac) {
+    const term1 = parenFrac[1].trim();
+    const sign = parenFrac[2].trim();
+    const num = parenFrac[3].trim();
+    const den = parenFrac[4].trim();
+    const rest = parenFrac[5].trim();
+
+    svg += `<text x="${curX}" y="${baselineY + 5 * scale}" font-size="${Math.round(fontSize * 1.70)}px" fill="${defaultColor}" font-weight="300">(</text>`;
+    curX += 14 * scale;
+
+    svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${term1} ${sign} </text>`;
+    curX += (`${term1} ${sign} `).length * fontSize * 0.58;
+
+    const fRes = renderFraction(curX, baselineY, num, den, fontSize, defaultColor);
+    svg += fRes.svg;
+    curX += fRes.width + 4 * scale;
+
+    svg += `<text x="${curX}" y="${baselineY + 5 * scale}" font-size="${Math.round(fontSize * 1.70)}px" fill="${defaultColor}" font-weight="300">)</text>`;
+    curX += 16 * scale;
+
+    if (rest) {
+      svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600"> ${rest}</text>`;
+      curX += (` ${rest}`).length * fontSize * 0.58;
+    }
+
+  } else if (trigFrac) {
+    const fnName = trigFrac[1];
+    const num = trigFrac[2].trim();
+    const den = trigFrac[3].trim();
+
+    svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${fnName.slice(0, 3)}</text>`;
+    curX += 3 * fontSize * 0.58;
+
+    const supY = baselineY - (fontSize * 0.45);
+    svg += `<text x="${curX}" y="${supY}" font-size="${Math.round(fontSize * 0.72)}px" fill="${defaultColor}" font-weight="bold">-1</text>`;
+    curX += 18 * scale;
+
+    svg += `<text x="${curX}" y="${baselineY + 5 * scale}" font-size="${Math.round(fontSize * 1.70)}px" fill="${defaultColor}" font-weight="300">(</text>`;
+    curX += 14 * scale;
+
+    const fRes = renderFraction(curX, baselineY, num, den, fontSize, defaultColor);
+    svg += fRes.svg;
+    curX += fRes.width + 4 * scale;
+
+    svg += `<text x="${curX}" y="${baselineY + 5 * scale}" font-size="${Math.round(fontSize * 1.70)}px" fill="${defaultColor}" font-weight="300">)</text>`;
+    curX += 16 * scale;
+
+  } else if (coordFrac) {
+    const num = coordFrac[1].trim();
+    const den = coordFrac[2].trim();
+    const c2 = coordFrac[3].trim();
+    const c3 = coordFrac[4].trim();
+
+    svg += `<text x="${curX}" y="${baselineY + 5 * scale}" font-size="${Math.round(fontSize * 1.70)}px" fill="${defaultColor}" font-weight="300">(</text>`;
+    curX += 14 * scale;
+
+    const fRes = renderFraction(curX, baselineY, num, den, fontSize, defaultColor);
+    svg += fRes.svg;
+    curX += fRes.width + 2 * scale;
+
+    svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">, ${c2}, ${c3}</text>`;
+    curX += (` , ${c2}, ${c3}`).length * fontSize * 0.58;
+
+    svg += `<text x="${curX}" y="${baselineY + 5 * scale}" font-size="${Math.round(fontSize * 1.70)}px" fill="${defaultColor}" font-weight="300">)</text>`;
+    curX += 16 * scale;
+
+  } else if (eqFrac1) {
+    const vName = eqFrac1[1];
+    const num = eqFrac1[2].trim();
+    const den = eqFrac1[3].trim();
+    const sign = eqFrac1[4];
+    const rest = eqFrac1[5].trim();
+
+    svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${vName} = </text>`;
+    curX += 4 * fontSize * 0.58;
+
+    const fRes = renderFraction(curX, baselineY, num, den, fontSize, defaultColor);
+    svg += fRes.svg;
+    curX += fRes.width + 4 * scale;
+
+    svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600"> ${sign} ${rest}</text>`;
+    curX += (` ${sign} ${rest}`).length * fontSize * 0.58;
+
+  } else if (eqFrac2) {
+    const vName = eqFrac2[1];
+    const first = eqFrac2[2].trim();
+    const sign = eqFrac2[3];
+    const num = eqFrac2[4].trim();
+    const den = eqFrac2[5].trim();
+
+    svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${vName} = ${first} ${sign} </text>`;
+    curX += (`${vName} = ${first} ${sign} `).length * fontSize * 0.58;
+
+    const fRes = renderFraction(curX, baselineY, num, den, fontSize, defaultColor);
+    svg += fRes.svg;
+    curX += fRes.width + 4 * scale;
+
+  } else if (standaloneFrac && !optText.includes(':') && !optText.includes('km h') && !optText.includes('m/s')) {
+    const leadingSign = standaloneFrac[1];
+    const num = standaloneFrac[2].trim();
+    const den = standaloneFrac[3].trim();
+
+    if (leadingSign) {
+      svg += `<text x="${curX}" y="${baselineY}" fill="${defaultColor}" font-weight="600">${leadingSign} </text>`;
+      curX += 2 * fontSize * 0.58;
+    }
+
+    const fRes = renderFraction(curX, baselineY, num, den, fontSize, defaultColor);
+    svg += fRes.svg;
+    curX += fRes.width + 4 * scale;
+
+  } else {
+    const tRes = renderSubToken(optText, curX, baselineY, fontSize, defaultColor);
+    svg += tRes.svg;
+    curX += tRes.width + 4 * scale;
   }
 
   const totalWidth = Math.ceil(curX + 8);
