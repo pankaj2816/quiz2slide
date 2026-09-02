@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quiz2Slide Studio - Free Online PDF to PPTX Quiz Generator</title>
-  <link rel="stylesheet" href="style.css?v=9.4">
+  <link rel="stylesheet" href="style.css?v=13.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -16,7 +16,7 @@
   <!-- PptxGenJS CDN (Client-side PowerPoint Presentation Generator) -->
   <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
   <!-- Embedded Default Template Base64 -->
-  <script src="chalkboard_b64.js?v=9.4"></script>
+  <script src="chalkboard_b64.js?v=13.0"></script>
 </head>
 <body>
 
@@ -31,7 +31,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <span class="revision-badge" id="revBadge">🏷️ Rev 12.0 (Hindi &amp; Bilingual Devanagari Engine)</span>
+        <span class="revision-badge" id="revBadge">🏷️ Rev 13.0 (Dual-Zone Question &amp; Option Area Selector)</span>
         <span class="status-badge" id="appStatus">● 100% Private (Runs in Browser)</span>
       </div>
     </div>
@@ -86,15 +86,47 @@
         <div class="step-num">2</div>
         <div>
           <h2>Visual Slide Area Selector</h2>
-          <p>Click and drag on the slide preview to define where questions & options will be placed.</p>
+          <p>Choose single unified area or independently position the <strong>Question Area</strong> and <strong>Option Area</strong>.</p>
+        </div>
+      </div>
+
+      <!-- Area Mode Switcher -->
+      <div class="area-mode-bar mb-3">
+        <div class="area-mode-tabs">
+          <button type="button" class="area-mode-tab active" id="btnModeUnified" data-mode="unified">
+            🔗 Unified Target Area (Auto Split)
+          </button>
+          <button type="button" class="area-mode-tab" id="btnModeDual" data-mode="dual">
+            ✂️ Separate Question &amp; Options Areas
+          </button>
         </div>
       </div>
 
       <div class="canvas-workspace">
         <div class="canvas-container" id="canvasWrapper">
           <canvas id="slideCanvas"></canvas>
-          <div class="selection-box" id="selectionBox">
-            <div class="selection-label" id="selectionLabel">Target Area</div>
+          
+          <!-- Unified Selection Box -->
+          <div class="selection-box box-unified active" id="selectionBoxUnified">
+            <div class="selection-label" id="selectionLabelUnified">Target Area</div>
+            <div class="resize-handle handle-tl"></div>
+            <div class="resize-handle handle-tr"></div>
+            <div class="resize-handle handle-bl"></div>
+            <div class="resize-handle handle-br"></div>
+          </div>
+
+          <!-- Dual Mode: Question Area Box (Cyan) -->
+          <div class="selection-box box-question" id="selectionBoxQuestion" style="display: none;">
+            <div class="selection-label label-question" id="selectionLabelQuestion">🟦 Question Area</div>
+            <div class="resize-handle handle-tl"></div>
+            <div class="resize-handle handle-tr"></div>
+            <div class="resize-handle handle-bl"></div>
+            <div class="resize-handle handle-br"></div>
+          </div>
+
+          <!-- Dual Mode: Option Area Box (Emerald Green) -->
+          <div class="selection-box box-options" id="selectionBoxOptions" style="display: none;">
+            <div class="selection-label label-options" id="selectionLabelOptions">🟩 Option Area</div>
             <div class="resize-handle handle-tl"></div>
             <div class="resize-handle handle-tr"></div>
             <div class="resize-handle handle-bl"></div>
@@ -103,8 +135,21 @@
         </div>
 
         <div class="canvas-controls">
+          <!-- Active Editing Target in Dual Mode -->
+          <div id="dualTargetSelector" class="dual-target-selector mb-3" style="display: none;">
+            <span class="selector-title">Active Canvas Focus:</span>
+            <div class="dual-target-btns">
+              <button type="button" class="btn-target-focus active" id="btnFocusQ" data-focus="question">
+                🟦 Question Area
+              </button>
+              <button type="button" class="btn-target-focus" id="btnFocusOpt" data-focus="options">
+                🟩 Option Area
+              </button>
+            </div>
+          </div>
+
           <h3>Target Area Presets</h3>
-          <div class="preset-grid">
+          <div class="preset-grid" id="presetGridUnified">
             <button class="preset-btn active" data-preset="chalkboard-left">
               🏫 Chalkboard (Teacher on Left)
             </button>
@@ -119,23 +164,84 @@
             </button>
           </div>
 
-          <h3 class="mt-4">Coordinates (% of slide)</h3>
-          <div class="coords-grid">
-            <div class="coord-field">
-              <label>Left (%)</label>
-              <input type="number" id="inputLeft" min="0" max="100" step="1" value="36">
+          <div class="preset-grid" id="presetGridDual" style="display: none;">
+            <button class="preset-btn active" data-dual-preset="chalkboard-stack">
+              🏫 Chalkboard Stack (Q Top / Opt Bot)
+            </button>
+            <button class="preset-btn" data-dual-preset="side-by-side">
+              📑 Side-by-Side (Q Left / Opt Right)
+            </button>
+            <button class="preset-btn" data-dual-preset="full-top-bottom">
+              🖥️ Full Width (Q Top / Opt Bot)
+            </button>
+            <button class="preset-btn" data-dual-preset="left-stack">
+              👨‍🏫 Left Stack (Teacher on Right)
+            </button>
+          </div>
+
+          <!-- Unified Coordinates Form -->
+          <div id="panelCoordsUnified">
+            <h3 class="mt-4">Coordinates (% of slide)</h3>
+            <div class="coords-grid">
+              <div class="coord-field">
+                <label>Left (%)</label>
+                <input type="number" id="inputLeft" min="0" max="100" step="1" value="36">
+              </div>
+              <div class="coord-field">
+                <label>Top (%)</label>
+                <input type="number" id="inputTop" min="0" max="100" step="1" value="10">
+              </div>
+              <div class="coord-field">
+                <label>Width (%)</label>
+                <input type="number" id="inputWidth" min="10" max="100" step="1" value="55">
+              </div>
+              <div class="coord-field">
+                <label>Height (%)</label>
+                <input type="number" id="inputHeight" min="10" max="100" step="1" value="77">
+              </div>
             </div>
-            <div class="coord-field">
-              <label>Top (%)</label>
-              <input type="number" id="inputTop" min="0" max="100" step="1" value="10">
+          </div>
+
+          <!-- Dual Coordinates Form -->
+          <div id="panelCoordsDual" style="display: none;">
+            <h3 class="mt-3 text-cyan">🟦 Question Area (%)</h3>
+            <div class="coords-grid coords-q">
+              <div class="coord-field">
+                <label>Q Left</label>
+                <input type="number" id="inputQLeft" min="0" max="100" step="1" value="36">
+              </div>
+              <div class="coord-field">
+                <label>Q Top</label>
+                <input type="number" id="inputQTop" min="0" max="100" step="1" value="10">
+              </div>
+              <div class="coord-field">
+                <label>Q Width</label>
+                <input type="number" id="inputQWidth" min="10" max="100" step="1" value="55">
+              </div>
+              <div class="coord-field">
+                <label>Q Height</label>
+                <input type="number" id="inputQHeight" min="5" max="100" step="1" value="35">
+              </div>
             </div>
-            <div class="coord-field">
-              <label>Width (%)</label>
-              <input type="number" id="inputWidth" min="10" max="100" step="1" value="55">
-            </div>
-            <div class="coord-field">
-              <label>Height (%)</label>
-              <input type="number" id="inputHeight" min="10" max="100" step="1" value="77">
+
+            <h3 class="mt-3 text-emerald">🟩 Option Area (%)</h3>
+            <div class="coords-grid coords-opt">
+              <div class="coord-field">
+                <label>Opt Left</label>
+                <input type="number" id="inputOptLeft" min="0" max="100" step="1" value="36">
+              </div>
+              <div class="coord-field">
+                <label>Opt Top</label>
+                <input type="number" id="inputOptTop" min="0" max="100" step="1" value="48">
+              </div>
+              <div class="coord-field">
+                <label>Opt Width</label>
+                <input type="number" id="inputOptWidth" min="10" max="100" step="1" value="55">
+              </div>
+              <div class="coord-field">
+                <label>Opt Height</label>
+                <input type="number" id="inputOptHeight" min="5" max="100" step="1" value="40">
+              </div>
             </div>
           </div>
 
@@ -268,6 +374,6 @@
 
   </main>
 
-  <script src="app.js?v=8.3"></script>
+  <script src="app.js?v=13.0"></script>
 </body>
 </html>

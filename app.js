@@ -33,11 +33,25 @@ let state = {
   parsedQuestions: [],
   questionDiagrams: [], // [ { pno, qNum, section, snippet, dataUrl } ]
   lastGeneratedBlob: null,
+  areaMode: 'unified', // 'unified' | 'dual'
+  activeDualFocus: 'question', // 'question' | 'options'
   bbox: {
     left_ratio: 0.36,
     top_ratio: 0.10,
     width_ratio: 0.55,
     height_ratio: 0.77
+  },
+  qBbox: {
+    left_ratio: 0.36,
+    top_ratio: 0.10,
+    width_ratio: 0.55,
+    height_ratio: 0.35
+  },
+  optBbox: {
+    left_ratio: 0.36,
+    top_ratio: 0.48,
+    width_ratio: 0.55,
+    height_ratio: 0.40
   }
 };
 window.state = state;
@@ -59,13 +73,35 @@ const filterInput = document.getElementById('filterInput');
 
 const slideCanvas = document.getElementById('slideCanvas');
 const canvasWrapper = document.getElementById('canvasWrapper');
-const selectionBox = document.getElementById('selectionBox');
+const selectionBoxUnified = document.getElementById('selectionBoxUnified');
+const selectionBoxQuestion = document.getElementById('selectionBoxQuestion');
+const selectionBoxOptions = document.getElementById('selectionBoxOptions');
 const ctx = slideCanvas.getContext('2d');
+
+const btnModeUnified = document.getElementById('btnModeUnified');
+const btnModeDual = document.getElementById('btnModeDual');
+const dualTargetSelector = document.getElementById('dualTargetSelector');
+const btnFocusQ = document.getElementById('btnFocusQ');
+const btnFocusOpt = document.getElementById('btnFocusOpt');
+const presetGridUnified = document.getElementById('presetGridUnified');
+const presetGridDual = document.getElementById('presetGridDual');
+const panelCoordsUnified = document.getElementById('panelCoordsUnified');
+const panelCoordsDual = document.getElementById('panelCoordsDual');
 
 const inputLeft = document.getElementById('inputLeft');
 const inputTop = document.getElementById('inputTop');
 const inputWidth = document.getElementById('inputWidth');
 const inputHeight = document.getElementById('inputHeight');
+
+const inputQLeft = document.getElementById('inputQLeft');
+const inputQTop = document.getElementById('inputQTop');
+const inputQWidth = document.getElementById('inputQWidth');
+const inputQHeight = document.getElementById('inputQHeight');
+
+const inputOptLeft = document.getElementById('inputOptLeft');
+const inputOptTop = document.getElementById('inputOptTop');
+const inputOptWidth = document.getElementById('inputOptWidth');
+const inputOptHeight = document.getElementById('inputOptHeight');
 
 const inputFontScale = document.getElementById('inputFontScale');
 const fontScaleDisplay = document.getElementById('fontScaleDisplay');
@@ -86,15 +122,35 @@ const downloadDetails = document.getElementById('downloadDetails');
 const btnDownloadAgain = document.getElementById('btnDownloadAgain');
 
 // Presets
-const PRESETS = {
-  'chalkboard-left': { left: 0.36, top: 0.10, width: 0.55, height: 0.77 },
-  'chalkboard-right': { left: 0.08, top: 0.10, width: 0.55, height: 0.77 },
-  'full-center': { left: 0.08, top: 0.10, width: 0.84, height: 0.80 },
-  'right-half': { left: 0.50, top: 0.10, width: 0.45, height: 0.80 }
+const UNIFIED_PRESETS = {
+  'chalkboard-left': { left_ratio: 0.36, top_ratio: 0.10, width_ratio: 0.55, height_ratio: 0.77 },
+  'chalkboard-right': { left_ratio: 0.08, top_ratio: 0.10, width_ratio: 0.55, height_ratio: 0.77 },
+  'full-center': { left_ratio: 0.08, top_ratio: 0.10, width_ratio: 0.84, height_ratio: 0.80 },
+  'right-half': { left_ratio: 0.50, top_ratio: 0.10, width_ratio: 0.45, height_ratio: 0.80 }
+};
+
+const DUAL_PRESETS = {
+  'chalkboard-stack': {
+    q: { left_ratio: 0.36, top_ratio: 0.10, width_ratio: 0.55, height_ratio: 0.35 },
+    opt: { left_ratio: 0.36, top_ratio: 0.48, width_ratio: 0.55, height_ratio: 0.40 }
+  },
+  'side-by-side': {
+    q: { left_ratio: 0.08, top_ratio: 0.12, width_ratio: 0.42, height_ratio: 0.75 },
+    opt: { left_ratio: 0.52, top_ratio: 0.12, width_ratio: 0.42, height_ratio: 0.75 }
+  },
+  'full-top-bottom': {
+    q: { left_ratio: 0.06, top_ratio: 0.08, width_ratio: 0.88, height_ratio: 0.35 },
+    opt: { left_ratio: 0.06, top_ratio: 0.46, width_ratio: 0.88, height_ratio: 0.46 }
+  },
+  'left-stack': {
+    q: { left_ratio: 0.08, top_ratio: 0.10, width_ratio: 0.52, height_ratio: 0.35 },
+    opt: { left_ratio: 0.08, top_ratio: 0.48, width_ratio: 0.52, height_ratio: 0.40 }
+  }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   setupFileUploads();
+  setupAreaModeSwitch();
   setupCanvasSelection();
   setupPresets();
   setupCoordInputs();
@@ -102,6 +158,70 @@ document.addEventListener('DOMContentLoaded', () => {
   setupGenerator();
   loadDefaultTemplatePreview();
 });
+
+// Setup Mode Switcher (Unified vs Dual Area)
+function setupAreaModeSwitch() {
+  if (!btnModeUnified || !btnModeDual) return;
+
+  btnModeUnified.addEventListener('click', () => {
+    state.areaMode = 'unified';
+    btnModeUnified.classList.add('active');
+    btnModeDual.classList.remove('active');
+
+    selectionBoxUnified.style.display = 'block';
+    selectionBoxQuestion.style.display = 'none';
+    selectionBoxOptions.style.display = 'none';
+
+    dualTargetSelector.style.display = 'none';
+    presetGridUnified.style.display = 'grid';
+    presetGridDual.style.display = 'none';
+    panelCoordsUnified.style.display = 'block';
+    panelCoordsDual.style.display = 'none';
+
+    updateSelectionBoxUI();
+    syncInputsFromState();
+  });
+
+  btnModeDual.addEventListener('click', () => {
+    state.areaMode = 'dual';
+    btnModeDual.classList.add('active');
+    btnModeUnified.classList.remove('active');
+
+    selectionBoxUnified.style.display = 'none';
+    selectionBoxQuestion.style.display = 'block';
+    selectionBoxOptions.style.display = 'block';
+
+    dualTargetSelector.style.display = 'block';
+    presetGridUnified.style.display = 'none';
+    presetGridDual.style.display = 'grid';
+    panelCoordsUnified.style.display = 'none';
+    panelCoordsDual.style.display = 'block';
+
+    setDualFocus(state.activeDualFocus || 'question');
+    updateSelectionBoxUI();
+    syncInputsFromState();
+  });
+
+  if (btnFocusQ && btnFocusOpt) {
+    btnFocusQ.addEventListener('click', () => setDualFocus('question'));
+    btnFocusOpt.addEventListener('click', () => setDualFocus('options'));
+  }
+}
+
+function setDualFocus(target) {
+  state.activeDualFocus = target;
+  if (target === 'question') {
+    btnFocusQ?.classList.add('active');
+    btnFocusOpt?.classList.remove('active');
+    selectionBoxQuestion?.classList.add('active');
+    selectionBoxOptions?.classList.remove('active');
+  } else {
+    btnFocusOpt?.classList.add('active');
+    btnFocusQ?.classList.remove('active');
+    selectionBoxOptions?.classList.add('active');
+    selectionBoxQuestion?.classList.remove('active');
+  }
+}
 
 // Setup Smart Global Font Scaling Controls
 function setupFontScalingControls() {
@@ -226,8 +346,9 @@ function renderCanvasImage(url) {
   };
 }
 
-// Canvas Bounding Box Selection
+// Canvas Bounding Box Selection (Unified and Dual-Zone)
 function setupCanvasSelection() {
+  let activeBoxType = 'unified'; // 'unified' | 'question' | 'options'
   let isDragging = false;
   let isResizing = false;
   let currentHandle = null;
@@ -235,21 +356,36 @@ function setupCanvasSelection() {
 
   updateSelectionBoxUI();
 
-  selectionBox.addEventListener('mousedown', (e) => {
-    if (e.target.classList.contains('resize-handle')) {
-      isResizing = true;
-      currentHandle = e.target;
-    } else {
-      isDragging = true;
-    }
-    startX = e.clientX;
-    startY = e.clientY;
-    startLeft = state.bbox.left_ratio;
-    startTop = state.bbox.top_ratio;
-    startWidth = state.bbox.width_ratio;
-    startHeight = state.bbox.height_ratio;
-    e.preventDefault();
-  });
+  function attachBoxEvents(boxElem, type) {
+    if (!boxElem) return;
+    boxElem.addEventListener('mousedown', (e) => {
+      activeBoxType = type;
+      if (type !== 'unified') {
+        setDualFocus(type);
+      }
+
+      if (e.target.classList.contains('resize-handle')) {
+        isResizing = true;
+        currentHandle = e.target;
+      } else {
+        isDragging = true;
+      }
+      startX = e.clientX;
+      startY = e.clientY;
+
+      const targetBbox = type === 'unified' ? state.bbox : (type === 'question' ? state.qBbox : state.optBbox);
+      startLeft = targetBbox.left_ratio;
+      startTop = targetBbox.top_ratio;
+      startWidth = targetBbox.width_ratio;
+      startHeight = targetBbox.height_ratio;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+
+  attachBoxEvents(selectionBoxUnified, 'unified');
+  attachBoxEvents(selectionBoxQuestion, 'question');
+  attachBoxEvents(selectionBoxOptions, 'options');
 
   window.addEventListener('mousemove', (e) => {
     if (!isDragging && !isResizing) return;
@@ -257,30 +393,32 @@ function setupCanvasSelection() {
     const dx = (e.clientX - startX) / rect.width;
     const dy = (e.clientY - startY) / rect.height;
 
+    const targetBbox = activeBoxType === 'unified' ? state.bbox : (activeBoxType === 'question' ? state.qBbox : state.optBbox);
+
     if (isDragging) {
-      state.bbox.left_ratio = Math.max(0, Math.min(1 - startWidth, startLeft + dx));
-      state.bbox.top_ratio = Math.max(0, Math.min(1 - startHeight, startTop + dy));
+      targetBbox.left_ratio = Math.max(0, Math.min(1 - startWidth, startLeft + dx));
+      targetBbox.top_ratio = Math.max(0, Math.min(1 - startHeight, startTop + dy));
     } else if (isResizing) {
       if (currentHandle.classList.contains('handle-br')) {
-        state.bbox.width_ratio = Math.max(0.1, Math.min(1 - startLeft, startWidth + dx));
-        state.bbox.height_ratio = Math.max(0.1, Math.min(1 - startTop, startHeight + dy));
+        targetBbox.width_ratio = Math.max(0.08, Math.min(1 - startLeft, startWidth + dx));
+        targetBbox.height_ratio = Math.max(0.06, Math.min(1 - startTop, startHeight + dy));
       } else if (currentHandle.classList.contains('handle-bl')) {
-        const newLeft = Math.max(0, Math.min(startLeft + startWidth - 0.1, startLeft + dx));
-        state.bbox.width_ratio = startWidth + (startLeft - newLeft);
-        state.bbox.left_ratio = newLeft;
-        state.bbox.height_ratio = Math.max(0.1, Math.min(1 - startTop, startHeight + dy));
+        const newLeft = Math.max(0, Math.min(startLeft + startWidth - 0.08, startLeft + dx));
+        targetBbox.width_ratio = startWidth + (startLeft - newLeft);
+        targetBbox.left_ratio = newLeft;
+        targetBbox.height_ratio = Math.max(0.06, Math.min(1 - startTop, startHeight + dy));
       } else if (currentHandle.classList.contains('handle-tr')) {
-        const newTop = Math.max(0, Math.min(startTop + startHeight - 0.1, startTop + dy));
-        state.bbox.height_ratio = startHeight + (startTop - newTop);
-        state.bbox.top_ratio = newTop;
-        state.bbox.width_ratio = Math.max(0.1, Math.min(1 - startLeft, startWidth + dx));
+        const newTop = Math.max(0, Math.min(startTop + startHeight - 0.06, startTop + dy));
+        targetBbox.height_ratio = startHeight + (startTop - newTop);
+        targetBbox.top_ratio = newTop;
+        targetBbox.width_ratio = Math.max(0.08, Math.min(1 - startLeft, startWidth + dx));
       } else if (currentHandle.classList.contains('handle-tl')) {
-        const newLeft = Math.max(0, Math.min(startLeft + startWidth - 0.1, startLeft + dx));
-        const newTop = Math.max(0, Math.min(startTop + startHeight - 0.1, startTop + dy));
-        state.bbox.width_ratio = startWidth + (startLeft - newLeft);
-        state.bbox.height_ratio = startHeight + (startTop - newTop);
-        state.bbox.left_ratio = newLeft;
-        state.bbox.top_ratio = newTop;
+        const newLeft = Math.max(0, Math.min(startLeft + startWidth - 0.08, startLeft + dx));
+        const newTop = Math.max(0, Math.min(startTop + startHeight - 0.06, startTop + dy));
+        targetBbox.width_ratio = startWidth + (startLeft - newLeft);
+        targetBbox.height_ratio = startHeight + (startTop - newTop);
+        targetBbox.left_ratio = newLeft;
+        targetBbox.top_ratio = newTop;
       }
     }
 
@@ -296,21 +434,45 @@ function setupCanvasSelection() {
 }
 
 function updateSelectionBoxUI() {
-  selectionBox.style.left = `${(state.bbox.left_ratio * 100).toFixed(1)}%`;
-  selectionBox.style.top = `${(state.bbox.top_ratio * 100).toFixed(1)}%`;
-  selectionBox.style.width = `${(state.bbox.width_ratio * 100).toFixed(1)}%`;
-  selectionBox.style.height = `${(state.bbox.height_ratio * 100).toFixed(1)}%`;
+  if (selectionBoxUnified) {
+    selectionBoxUnified.style.left = `${(state.bbox.left_ratio * 100).toFixed(1)}%`;
+    selectionBoxUnified.style.top = `${(state.bbox.top_ratio * 100).toFixed(1)}%`;
+    selectionBoxUnified.style.width = `${(state.bbox.width_ratio * 100).toFixed(1)}%`;
+    selectionBoxUnified.style.height = `${(state.bbox.height_ratio * 100).toFixed(1)}%`;
+  }
+  if (selectionBoxQuestion) {
+    selectionBoxQuestion.style.left = `${(state.qBbox.left_ratio * 100).toFixed(1)}%`;
+    selectionBoxQuestion.style.top = `${(state.qBbox.top_ratio * 100).toFixed(1)}%`;
+    selectionBoxQuestion.style.width = `${(state.qBbox.width_ratio * 100).toFixed(1)}%`;
+    selectionBoxQuestion.style.height = `${(state.qBbox.height_ratio * 100).toFixed(1)}%`;
+  }
+  if (selectionBoxOptions) {
+    selectionBoxOptions.style.left = `${(state.optBbox.left_ratio * 100).toFixed(1)}%`;
+    selectionBoxOptions.style.top = `${(state.optBbox.top_ratio * 100).toFixed(1)}%`;
+    selectionBoxOptions.style.width = `${(state.optBbox.width_ratio * 100).toFixed(1)}%`;
+    selectionBoxOptions.style.height = `${(state.optBbox.height_ratio * 100).toFixed(1)}%`;
+  }
 }
 
 function syncInputsFromState() {
-  inputLeft.value = Math.round(state.bbox.left_ratio * 100);
-  inputTop.value = Math.round(state.bbox.top_ratio * 100);
-  inputWidth.value = Math.round(state.bbox.width_ratio * 100);
-  inputHeight.value = Math.round(state.bbox.height_ratio * 100);
+  if (inputLeft) inputLeft.value = Math.round(state.bbox.left_ratio * 100);
+  if (inputTop) inputTop.value = Math.round(state.bbox.top_ratio * 100);
+  if (inputWidth) inputWidth.value = Math.round(state.bbox.width_ratio * 100);
+  if (inputHeight) inputHeight.value = Math.round(state.bbox.height_ratio * 100);
+
+  if (inputQLeft) inputQLeft.value = Math.round(state.qBbox.left_ratio * 100);
+  if (inputQTop) inputQTop.value = Math.round(state.qBbox.top_ratio * 100);
+  if (inputQWidth) inputQWidth.value = Math.round(state.qBbox.width_ratio * 100);
+  if (inputQHeight) inputQHeight.value = Math.round(state.qBbox.height_ratio * 100);
+
+  if (inputOptLeft) inputOptLeft.value = Math.round(state.optBbox.left_ratio * 100);
+  if (inputOptTop) inputOptTop.value = Math.round(state.optBbox.top_ratio * 100);
+  if (inputOptWidth) inputOptWidth.value = Math.round(state.optBbox.width_ratio * 100);
+  if (inputOptHeight) inputOptHeight.value = Math.round(state.optBbox.height_ratio * 100);
 }
 
 function setupCoordInputs() {
-  const handleInputChange = () => {
+  const handleUnifiedChange = () => {
     state.bbox.left_ratio = parseFloat(inputLeft.value) / 100;
     state.bbox.top_ratio = parseFloat(inputTop.value) / 100;
     state.bbox.width_ratio = parseFloat(inputWidth.value) / 100;
@@ -318,20 +480,53 @@ function setupCoordInputs() {
     updateSelectionBoxUI();
   };
 
-  inputLeft.addEventListener('input', handleInputChange);
-  inputTop.addEventListener('input', handleInputChange);
-  inputWidth.addEventListener('input', handleInputChange);
-  inputHeight.addEventListener('input', handleInputChange);
+  if (inputLeft) inputLeft.addEventListener('input', handleUnifiedChange);
+  if (inputTop) inputTop.addEventListener('input', handleUnifiedChange);
+  if (inputWidth) inputWidth.addEventListener('input', handleUnifiedChange);
+  if (inputHeight) inputHeight.addEventListener('input', handleUnifiedChange);
+
+  const handleDualChange = () => {
+    state.qBbox.left_ratio = parseFloat(inputQLeft.value) / 100;
+    state.qBbox.top_ratio = parseFloat(inputQTop.value) / 100;
+    state.qBbox.width_ratio = parseFloat(inputQWidth.value) / 100;
+    state.qBbox.height_ratio = parseFloat(inputQHeight.value) / 100;
+
+    state.optBbox.left_ratio = parseFloat(inputOptLeft.value) / 100;
+    state.optBbox.top_ratio = parseFloat(inputOptTop.value) / 100;
+    state.optBbox.width_ratio = parseFloat(inputOptWidth.value) / 100;
+    state.optBbox.height_ratio = parseFloat(inputOptHeight.value) / 100;
+    updateSelectionBoxUI();
+  };
+
+  [inputQLeft, inputQTop, inputQWidth, inputQHeight, inputOptLeft, inputOptTop, inputOptWidth, inputOptHeight].forEach(inp => {
+    if (inp) inp.addEventListener('input', handleDualChange);
+  });
 }
 
 function setupPresets() {
-  document.querySelectorAll('.preset-btn').forEach(btn => {
+  // Unified Presets
+  document.querySelectorAll('#presetGridUnified .preset-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#presetGridUnified .preset-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const presetKey = btn.getAttribute('data-preset');
-      if (PRESETS[presetKey]) {
-        state.bbox = { ...PRESETS[presetKey] };
+      if (UNIFIED_PRESETS[presetKey]) {
+        state.bbox = { ...UNIFIED_PRESETS[presetKey] };
+        syncInputsFromState();
+        updateSelectionBoxUI();
+      }
+    });
+  });
+
+  // Dual Presets
+  document.querySelectorAll('#presetGridDual .preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#presetGridDual .preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const dualKey = btn.getAttribute('data-dual-preset');
+      if (DUAL_PRESETS[dualKey]) {
+        state.qBbox = { ...DUAL_PRESETS[dualKey].q };
+        state.optBbox = { ...DUAL_PRESETS[dualKey].opt };
         syncInputsFromState();
         updateSelectionBoxUI();
       }
@@ -1260,6 +1455,21 @@ function setupGenerator() {
       const slideW = 13.333;
       const slideH = 7.5;
 
+      const isDual = state.areaMode === 'dual';
+
+      // Question area bounds in inches
+      const qLeft = slideW * (isDual ? state.qBbox.left_ratio : state.bbox.left_ratio);
+      const qTop = slideH * (isDual ? state.qBbox.top_ratio : state.bbox.top_ratio);
+      const qWidth = slideW * (isDual ? state.qBbox.width_ratio : state.bbox.width_ratio);
+      const qHeight = isDual ? (slideH * state.qBbox.height_ratio) : (slideH * state.bbox.height_ratio * 0.45);
+
+      // Option area bounds in inches
+      const optLeft = slideW * (isDual ? state.optBbox.left_ratio : state.bbox.left_ratio);
+      const optTop = isDual ? (slideH * state.optBbox.top_ratio) : (qTop + qHeight + 0.2);
+      const optWidth = slideW * (isDual ? state.optBbox.width_ratio : state.bbox.width_ratio);
+      const optHeight = isDual ? (slideH * state.optBbox.height_ratio) : ((slideH * (state.bbox.top_ratio + state.bbox.height_ratio)) - optTop);
+
+      // Unified bounding box for fallback / solution slides
       const bLeft = slideW * state.bbox.left_ratio;
       const bTop = slideH * state.bbox.top_ratio;
       const bWidth = slideW * state.bbox.width_ratio;
@@ -1323,16 +1533,19 @@ function setupGenerator() {
           textRunsTop.push({ text: `Q${q.q_num}. `, options: { fontSize: topQPt, bold: true, color: colQnumHex, fontFace: slideFontFace } });
           textRunsTop.push({ text: stemLines[0], options: { fontSize: topStPt, bold: true, color: colStemHex, fontFace: slideFontFace, breakLine: true } });
 
-          slide.addText(textRunsTop, { x: bLeft, y: bTop, w: bWidth, h: topH, wrap: true, valign: 'top', fontFace: slideFontFace });
+          slide.addText(textRunsTop, { x: qLeft, y: qTop, w: qWidth, h: topH, wrap: true, valign: 'top', fontFace: slideFontFace });
 
           const diagW = 3.8;
           const diagH = 1.95;
-          const diagL = bLeft + (bWidth - diagW) / 2;
-          const diagT = bTop + topH + 0.05;
+          const diagL = qLeft + (qWidth - diagW) / 2;
+          const diagT = qTop + topH + 0.05;
           slide.addImage({ data: q.imageData, x: diagL, y: diagT, w: diagW, h: diagH });
 
-          const botT = diagT + diagH + 0.05;
-          const botH = (bTop + bHeight) - botT;
+          const botT = isDual ? optTop : (diagT + diagH + 0.05);
+          const botH = isDual ? optHeight : ((bTop + bHeight) - botT);
+          const botL = isDual ? optLeft : bLeft;
+          const botW = isDual ? optWidth : bWidth;
+
           const botStPt = Math.max(10.5, Math.round(12.5 * fontScaleFactor));
           const botOptPt = Math.max(10, Math.round(12 * fontScaleFactor));
 
@@ -1342,7 +1555,7 @@ function setupGenerator() {
             if (stemLines.length > 1) {
               const subStemH = 0.4;
               slide.addText([{ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex, fontFace: slideFontFace } }], {
-                x: bLeft, y: curDiagOptY, w: bWidth, h: subStemH, wrap: true, valign: 'top', fontFace: slideFontFace
+                x: botL, y: curDiagOptY, w: botW, h: subStemH, wrap: true, valign: 'top', fontFace: slideFontFace
               });
               curDiagOptY += subStemH + 0.05;
             }
@@ -1352,12 +1565,12 @@ function setupGenerator() {
                 if (isMathExpression(q.options[k])) {
                   const svgOpt = renderMathOptionToSvg(k, q.options[k], botOptPt);
                   const imgOpt = await svgToPngDataUrl(svgOpt);
-                  slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curDiagOptY, w: imgOpt.widthInches, h: imgOpt.heightInches });
+                  slide.addImage({ data: imgOpt.dataUrl, x: botL, y: curDiagOptY, w: imgOpt.widthInches, h: imgOpt.heightInches });
                 } else {
                   slide.addText([
                     { text: getOptLbl(k), options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
                     { text: q.options[k], options: { fontSize: botOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
-                  ], { x: bLeft, y: curDiagOptY, w: bWidth, h: diagOptSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
+                  ], { x: botL, y: curDiagOptY, w: botW, h: diagOptSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                 }
                 curDiagOptY += diagOptSpacing;
               }
@@ -1380,7 +1593,7 @@ function setupGenerator() {
               textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: '81C784', fontFace: slideFontFace } });
             }
 
-            slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top', fontFace: slideFontFace });
+            slide.addText(textRunsBot, { x: botL, y: botT, w: botW, h: botH, wrap: true, valign: 'top', fontFace: slideFontFace });
           }
         }
         // 2. 2x2 Grid Layout for Short Options
@@ -1397,22 +1610,23 @@ function setupGenerator() {
           qTextRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: gQPt, bold: true, color: colQnumHex, fontFace: slideFontFace } });
           qTextRuns.push({ text: q.question, options: { fontSize: gStPt, bold: true, color: colStemHex, fontFace: slideFontFace } });
 
-          const stemBoxH = Math.min(2.8, 2.3 * (fontScaleFactor > 1.2 ? 1.2 : 1.0));
+          const stemBoxH = isDual ? qHeight : Math.min(2.8, 2.3 * (fontScaleFactor > 1.2 ? 1.2 : 1.0));
           slide.addText(qTextRuns, {
-            x: bLeft,
-            y: bTop,
-            w: bWidth,
+            x: qLeft,
+            y: qTop,
+            w: qWidth,
             h: stemBoxH,
             wrap: true,
             valign: 'top',
             fontFace: slideFontFace
           });
 
-          const colW = (bWidth - 0.5) / 2;
-          const col1X = bLeft;
-          const col2X = bLeft + colW + 0.5;
-          const row1Y = bTop + stemBoxH + 0.25;
-          const row2Y = row1Y + 1.25;
+          const colW = (optWidth - 0.4) / 2;
+          const col1X = optLeft;
+          const col2X = optLeft + colW + 0.4;
+          const row1Y = isDual ? optTop : (qTop + stemBoxH + 0.25);
+          const row2Y = isDual ? (optTop + optHeight / 2) : (row1Y + 1.25);
+          const rowBoxH = isDual ? (optHeight / 2 - 0.1) : 1.8;
 
           const hasMath = ['A', 'B', 'C', 'D'].some(k => q.options[k] && isMathExpression(q.options[k]));
           if (hasMath) {
@@ -1475,7 +1689,7 @@ function setupGenerator() {
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
               { text: getOptLbl('C'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
               { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
-            ], { x: col1X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top', fontFace: slideFontFace });
+            ], { x: col1X, y: row1Y, w: colW, h: rowBoxH, wrap: true, valign: 'top', fontFace: slideFontFace });
 
             // Col 2 (B & D)
             slide.addText([
@@ -1484,7 +1698,7 @@ function setupGenerator() {
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
               { text: getOptLbl('D'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
               { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
-            ], { x: col2X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top', fontFace: slideFontFace });
+            ], { x: col2X, y: row1Y, w: colW, h: rowBoxH, wrap: true, valign: 'top', fontFace: slideFontFace });
           }
         }
         // 3. Standard Vertical Layout with Dynamic Typography & Smart Auto-Fit
@@ -1503,15 +1717,18 @@ function setupGenerator() {
           let optPt = Math.round(baseOpt * fontScaleFactor);
           let spPt = Math.max(3, Math.round(baseSp * fontScaleFactor));
 
+          const activeContW = isDual ? Math.min(qWidth, optWidth) : bWidth;
+          const activeContH = isDual ? (qHeight + optHeight) : bHeight;
+
           // Smart Auto-Fit Safety Guard: Dynamically scale font to guarantee zero boundary overflow
-          const charsPerLine = Math.max(35, Math.floor(bWidth * (72 / (stPt * 0.55))));
+          const charsPerLine = Math.max(35, Math.floor(activeContW * (72 / (stPt * 0.55))));
           const estStemLines = stemLines.reduce((acc, line) => acc + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
-          const optCharsPerLine = Math.max(35, Math.floor(bWidth * (72 / (optPt * 0.55))));
+          const optCharsPerLine = Math.max(35, Math.floor(activeContW * (72 / (optPt * 0.55))));
           const optLinesCount = ['A', 'B', 'C', 'D'].filter(k => q.options[k]).reduce((acc, k) => acc + Math.max(1, Math.ceil((q.options[k] || '').length / optCharsPerLine)), 0);
           const estTotalHeight = (estStemLines * stPt * 1.35 + optLinesCount * optPt * 1.35 + spPt + 30) / 72;
 
-          if (estTotalHeight > bHeight * 0.95) {
-            const damp = (bHeight * 0.95) / estTotalHeight;
+          if (estTotalHeight > activeContH * 0.95) {
+            const damp = (activeContH * 0.95) / estTotalHeight;
             stPt = Math.max(11, Math.floor(stPt * damp));
             optPt = Math.max(10, Math.floor(optPt * damp));
             spPt = Math.max(2, Math.floor(spPt * damp));
@@ -1521,7 +1738,72 @@ function setupGenerator() {
           const hasOptMath = ['A', 'B', 'C', 'D'].some(k => q.options[k] && isMathExpression(q.options[k]));
           const hasMath = hasStemMath || hasOptMath;
 
-          if (hasMath) {
+          if (isDual) {
+            // Distinct Question Stem Box
+            const qRuns = [];
+            if (q.section) {
+              qRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, fontFace: slideFontFace, breakLine: true } });
+            }
+            qRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex, fontFace: slideFontFace } });
+            qRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, fontFace: slideFontFace, breakLine: true } });
+            for (let i = 1; i < stemLines.length; i++) {
+              const sub = stemLines[i];
+              const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
+              qRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, fontFace: slideFontFace, breakLine: true } });
+            }
+
+            slide.addText(qRuns, {
+              x: qLeft,
+              y: qTop,
+              w: qWidth,
+              h: qHeight,
+              wrap: true,
+              valign: 'top',
+              fontFace: slideFontFace
+            });
+
+            // Distinct Options Box
+            if (hasOptMath) {
+              let curOptY = optTop;
+              const optSpacing = Math.max(0.5, optHeight / 4.2);
+              for (const k of ['A', 'B', 'C', 'D']) {
+                if (q.options[k]) {
+                  if (isMathExpression(q.options[k])) {
+                    const svgOpt = renderMathOptionToSvg(k, q.options[k], optPt);
+                    const imgOpt = await svgToPngDataUrl(svgOpt);
+                    slide.addImage({ data: imgOpt.dataUrl, x: optLeft, y: curOptY, w: imgOpt.widthInches, h: imgOpt.heightInches });
+                  } else {
+                    slide.addText([
+                      { text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                      { text: q.options[k], options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                    ], { x: optLeft, y: curOptY, w: optWidth, h: optSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
+                  }
+                  curOptY += optSpacing;
+                }
+              }
+            } else {
+              const optRuns = [];
+              for (const k of ['A', 'B', 'C', 'D']) {
+                if (q.options[k]) {
+                  optRuns.push({ text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
+                  optRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
+                }
+              }
+              if (solutionMode === 'inline' && q.solution) {
+                const ansLine = q.solution.split('\n')[0] || '';
+                optRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784', fontFace: slideFontFace } });
+              }
+              slide.addText(optRuns, {
+                x: optLeft,
+                y: optTop,
+                w: optWidth,
+                h: optHeight,
+                wrap: true,
+                valign: 'top',
+                fontFace: slideFontFace
+              });
+            }
+          } else if (hasMath) {
             let curContentY = bTop;
 
             for (let i = 0; i < stemLines.length; i++) {
