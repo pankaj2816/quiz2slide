@@ -149,6 +149,7 @@ const DUAL_PRESETS = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupAppNavigation();
   setupFileUploads();
   setupAreaModeSwitch();
   setupCanvasSelection();
@@ -156,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCoordInputs();
   setupFontScalingControls();
   setupGenerator();
+  setupResultMerger();
   loadDefaultTemplatePreview();
 });
 
@@ -2291,3 +2293,508 @@ function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor =
   const totalWidth = Math.ceil(curX + 8);
   return svg.replace('<svg xmlns="http://www.w3.org/2000/svg"', `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" viewBox="0 0 ${totalWidth} ${height}"`) + '</svg>';
 }
+
+// ==========================================================================
+// Top Application View Navigation (Quiz Studio vs Result Merger)
+// ==========================================================================
+function setupAppNavigation() {
+  const tabQuiz = document.getElementById('tabQuizToPpt');
+  const tabMerger = document.getElementById('tabResultMerger');
+  const viewQuiz = document.getElementById('viewQuizStudio');
+  const viewMerger = document.getElementById('viewResultMerger');
+
+  if (!tabQuiz || !tabMerger || !viewQuiz || !viewMerger) return;
+
+  tabQuiz.addEventListener('click', () => {
+    tabQuiz.classList.add('active');
+    tabMerger.classList.remove('active');
+    viewQuiz.style.display = 'block';
+    viewMerger.style.display = 'none';
+  });
+
+  tabMerger.addEventListener('click', () => {
+    tabMerger.classList.add('active');
+    tabQuiz.classList.remove('active');
+    viewQuiz.style.display = 'none';
+    viewMerger.style.display = 'block';
+  });
+}
+
+// ==========================================================================
+// Result Sheet & Crystal Report Mobile Number Merger
+// ==========================================================================
+function setupResultMerger() {
+  const resultDropzone = document.getElementById('resultDropzone');
+  const inputResultFile = document.getElementById('inputResultFile');
+  const resultFileLabel = document.getElementById('resultFileLabel');
+
+  const crystalDropzone = document.getElementById('crystalDropzone');
+  const inputCrystalFile = document.getElementById('inputCrystalFile');
+  const crystalFileLabel = document.getElementById('crystalFileLabel');
+
+  const chkStripZeros = document.getElementById('chkStripZeros');
+  const chkSmartNameFallback = document.getElementById('chkSmartNameFallback');
+
+  const btnRunMerge = document.getElementById('btnRunMerge');
+  const mergeStatusBox = document.getElementById('mergeStatusBox');
+  const mergeStatusIcon = document.getElementById('mergeStatusIcon');
+  const mergeStatusText = document.getElementById('mergeStatusText');
+
+  const sectionMergeResults = document.getElementById('sectionMergeResults');
+  const statTotalRows = document.getElementById('statTotalRows');
+  const statMatchedRows = document.getElementById('statMatchedRows');
+  const statMatchRate = document.getElementById('statMatchRate');
+  const statUnmatchedRows = document.getElementById('statUnmatchedRows');
+
+  const btnFilterAll = document.getElementById('btnFilterAll');
+  const btnFilterMatched = document.getElementById('btnFilterMatched');
+  const btnFilterUnmatched = document.getElementById('btnFilterUnmatched');
+  const cntFilterAll = document.getElementById('cntFilterAll');
+  const cntFilterMatched = document.getElementById('cntFilterMatched');
+  const cntFilterUnmatched = document.getElementById('cntFilterUnmatched');
+  const inputSearchTable = document.getElementById('inputSearchTable');
+
+  const previewTableHead = document.getElementById('previewTableHead');
+  const previewTableBody = document.getElementById('previewTableBody');
+
+  const btnDownloadExcel = document.getElementById('btnDownloadExcel');
+  const btnDownloadCsv = document.getElementById('btnDownloadCsv');
+
+  let resultFileData = null;
+  let crystalFileData = null;
+  let mergedData = null; // { headers, rows, matchedCount, unmatchedCount }
+  let currentFilter = 'all'; // 'all' | 'matched' | 'unmatched'
+
+  if (!inputResultFile || !inputCrystalFile || !btnRunMerge) return;
+
+  // File Upload Handlers for Result Sheet
+  inputResultFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleResultFile(file);
+  });
+
+  resultDropzone.addEventListener('dragover', (e) => { e.preventDefault(); resultDropzone.classList.add('drag-over'); });
+  resultDropzone.addEventListener('dragleave', () => { resultDropzone.classList.remove('drag-over'); });
+  resultDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    resultDropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleResultFile(e.dataTransfer.files[0]);
+  });
+
+  // File Upload Handlers for Crystal Report
+  inputCrystalFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleCrystalFile(file);
+  });
+
+  crystalDropzone.addEventListener('dragover', (e) => { e.preventDefault(); crystalDropzone.classList.add('drag-over'); });
+  crystalDropzone.addEventListener('dragleave', () => { crystalDropzone.classList.remove('drag-over'); });
+  crystalDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    crystalDropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleCrystalFile(e.dataTransfer.files[0]);
+  });
+
+  function handleResultFile(file) {
+    resultFileData = { file, name: file.name };
+    resultFileLabel.innerText = `📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    checkReadyToMerge();
+  }
+
+  function handleCrystalFile(file) {
+    crystalFileData = { file, name: file.name };
+    crystalFileLabel.innerText = `📑 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    checkReadyToMerge();
+  }
+
+  function checkReadyToMerge() {
+    if (resultFileData && crystalFileData) {
+      btnRunMerge.disabled = false;
+      mergeStatusIcon.innerText = '✨';
+      mergeStatusText.innerText = `Both sheets loaded. Ready to match and merge.`;
+    } else if (resultFileData) {
+      mergeStatusText.innerText = `Result sheet loaded. Please upload Crystal Report / Student List.`;
+    } else if (crystalFileData) {
+      mergeStatusText.innerText = `Crystal Report loaded. Please upload Result Sheet.`;
+    }
+  }
+
+  // Normalization Helpers
+  function cleanKey(val, stripZeros = true) {
+    if (val === null || val === undefined) return '';
+    let s = String(val).trim();
+    if (s.endsWith('.0')) s = s.slice(0, -2);
+    if (!stripZeros) return s;
+    const digits = s.replace(/\D/g, '');
+    if (digits) {
+      return digits.replace(/^0+/, '') || '0';
+    }
+    return s.replace(/^0+/, '');
+  }
+
+  function cleanContact(val) {
+    if (val === null || val === undefined) return '';
+    let s = String(val);
+    s = s.replace(/_x000d_/gi, ', ').replace(/_x000D_/gi, ', ').replace(/\r/g, ' ').replace(/\n/g, ', ');
+    const parts = s.split(/[,/\s]+/).map(p => p.trim()).filter(p => p.length > 0);
+    // Deduplicate identical numbers if repeated
+    const unique = [];
+    parts.forEach(p => { if (!unique.includes(p)) unique.push(p); });
+    return unique.join(', ');
+  }
+
+  function cleanName(n) {
+    if (!n) return '';
+    return String(n).toUpperCase().replace(/[^A-Z]/g, '');
+  }
+
+  // File Parsing (Supports XML Spreadsheet 2003, XLSX, XLS, CSV)
+  async function parseSpreadsheet(file) {
+    const buffer = await file.arrayBuffer();
+    const textSample = new TextDecoder('utf-8').decode(buffer.slice(0, 1000));
+
+    // Check if it's Excel 2003 XML Spreadsheet (SpreadsheetML)
+    if (textSample.includes('<?xml') && textSample.includes('urn:schemas-microsoft-com:office:spreadsheet')) {
+      const fullText = new TextDecoder('utf-8').decode(buffer);
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(fullText, 'text/xml');
+      const rows = [];
+      const rowNodes = xmlDoc.getElementsByTagName('Row');
+
+      for (let r = 0; r < rowNodes.length; r++) {
+        const rowNode = rowNodes[r];
+        const rowVals = [];
+        const cellNodes = rowNode.getElementsByTagName('Cell');
+
+        for (let c = 0; c < cellNodes.length; c++) {
+          const cell = cellNodes[c];
+          const idxAttr = cell.getAttribute('ss:Index');
+          if (idxAttr) {
+            const targetCol = parseInt(idxAttr, 10) - 1;
+            while (rowVals.length < targetCol) rowVals.push('');
+          }
+          const dataElem = cell.getElementsByTagName('Data')[0];
+          const val = dataElem ? (dataElem.textContent || '') : '';
+          rowVals.push(val);
+        }
+        rows.push(rowVals);
+      }
+      return rows;
+    }
+
+    // Standard XLSX / XLS / CSV via SheetJS
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const firstSheetName = wb.SheetNames[0];
+    const ws = wb.Sheets[firstSheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    return rows;
+  }
+
+  // Merge Action
+  btnRunMerge.addEventListener('click', async () => {
+    if (!resultFileData || !crystalFileData) return;
+
+    btnRunMerge.disabled = true;
+    btnRunMerge.innerHTML = '<span>⏳</span> Merging Sheets...';
+    mergeStatusIcon.innerText = '⚙️';
+    mergeStatusText.innerText = 'Parsing and indexing student admission numbers...';
+
+    try {
+      // 1. Parse Crystal Report
+      const crystalRows = await parseSpreadsheet(crystalFileData.file);
+      if (!crystalRows || crystalRows.length === 0) {
+        throw new Error('Crystal Report sheet is empty.');
+      }
+
+      // Find header row in Crystal Report
+      let crysHdrIdx = 0;
+      for (let i = 0; i < crystalRows.length; i++) {
+        const rStr = crystalRows[i].join(' ').toLowerCase();
+        if (rStr.includes('adm') || rStr.includes('sno') || rStr.includes('contact')) {
+          crysHdrIdx = i;
+          break;
+        }
+      }
+
+      const crystalHeaders = crystalRows[crysHdrIdx].map(h => String(h || '').trim());
+      const crystalDataRows = crystalRows.slice(crysHdrIdx + 1);
+
+      let crysAdmIdx = -1;
+      let crysContactIdx = -1;
+      let crysNameIdx = -1;
+
+      crystalHeaders.forEach((h, idx) => {
+        const hl = h.toLowerCase().replace(/[\s_\.]/g, '');
+        if (hl.includes('adm') && crysAdmIdx === -1) crysAdmIdx = idx;
+        if ((hl.includes('contact') || hl.includes('mobile') || hl.includes('phone')) && crysContactIdx === -1) crysContactIdx = idx;
+        if (hl.includes('name') && !hl.includes('father') && !hl.includes('mother') && crysNameIdx === -1) crysNameIdx = idx;
+      });
+
+      if (crysAdmIdx === -1) crysAdmIdx = 1; // Default fallback column 1
+      if (crysContactIdx === -1) crysContactIdx = 11; // Default fallback column 11
+
+      const stripZeros = chkStripZeros.checked;
+      const enableNameFallback = chkSmartNameFallback.checked;
+
+      // Build Crystal Lookup Map
+      const admMap = {};
+      const nameMap = {};
+      const nameCounts = {};
+
+      crystalDataRows.forEach(r => {
+        const rawAdm = r[crysAdmIdx];
+        const rawContact = r[crysContactIdx];
+        const rawName = crysNameIdx >= 0 ? r[crysNameIdx] : '';
+
+        const cleanAdm = cleanKey(rawAdm, stripZeros);
+        const contact = cleanContact(rawContact);
+        const normName = cleanName(rawName);
+
+        if (cleanAdm) {
+          admMap[cleanAdm] = {
+            contact: contact,
+            name: String(rawName || '').trim(),
+            admOrig: String(rawAdm || '').trim()
+          };
+        }
+
+        if (normName) {
+          nameCounts[normName] = (nameCounts[normName] || 0) + 1;
+          if (!nameMap[normName]) {
+            nameMap[normName] = {
+              contact: contact,
+              name: String(rawName || '').trim(),
+              cleanAdm: cleanAdm
+            };
+          }
+        }
+      });
+
+      // 2. Parse Result Sheet
+      const resultRows = await parseSpreadsheet(resultFileData.file);
+      if (!resultRows || resultRows.length === 0) {
+        throw new Error('Result sheet is empty.');
+      }
+
+      // Find header row in Result Sheet
+      let resHdrIdx = 0;
+      for (let i = 0; i < resultRows.length; i++) {
+        const rStr = resultRows[i].join(' ').toLowerCase();
+        if (rStr.includes('roll') || rStr.includes('student') || rStr.includes('name')) {
+          resHdrIdx = i;
+          break;
+        }
+      }
+
+      const resHeaders = resultRows[resHdrIdx].map(h => String(h || '').trim());
+      const resDataRows = resultRows.slice(resHdrIdx + 1).filter(r => r.some(c => String(c || '').trim().length > 0));
+
+      let resRollIdx = -1;
+      let resNameIdx = -1;
+
+      resHeaders.forEach((h, idx) => {
+        const hl = h.toLowerCase().replace(/[\s_\.]/g, '');
+        if (hl.includes('roll') && resRollIdx === -1) resRollIdx = idx;
+        if (hl.includes('name') && resNameIdx === -1) resNameIdx = idx;
+      });
+
+      if (resRollIdx === -1) resRollIdx = 2; // Default fallback column 2
+
+      // Add 'Mobile Number' as the LAST column
+      const outHeaders = [...resHeaders, 'Mobile Number'];
+      const outRows = [];
+
+      let matchedCount = 0;
+      let unmatchedCount = 0;
+
+      resDataRows.forEach((r, rIdx) => {
+        const rowVals = [...r];
+        while (rowVals.length < resHeaders.length) rowVals.push('');
+
+        const rawRoll = rowVals[resRollIdx] || '';
+        const rawName = resNameIdx >= 0 ? (rowVals[resNameIdx] || '') : '';
+
+        const cleanRoll = cleanKey(rawRoll, stripZeros);
+        let mobile = '';
+        let status = 'unmatched';
+
+        // 1. Primary Match: by Adm Number / Roll Number
+        if (cleanRoll && admMap[cleanRoll]) {
+          mobile = admMap[cleanRoll].contact;
+          matchedCount++;
+          status = 'matched';
+        }
+        // 2. Optional Fallback: by Name
+        else if (enableNameFallback && rawName) {
+          const normName = cleanName(rawName);
+          if (normName && nameMap[normName] && nameCounts[normName] === 1) {
+            mobile = nameMap[normName].contact;
+            matchedCount++;
+            status = 'matched';
+          } else {
+            unmatchedCount++;
+          }
+        } else {
+          unmatchedCount++;
+        }
+
+        rowVals.push(mobile);
+        outRows.push({
+          data: rowVals,
+          status: status,
+          roll: rawRoll,
+          cleanRoll: cleanRoll,
+          name: rawName,
+          mobile: mobile
+        });
+      });
+
+      mergedData = {
+        headers: outHeaders,
+        rows: outRows,
+        matchedCount,
+        unmatchedCount,
+        totalCount: outRows.length
+      };
+
+      // 3. Update UI & Display Preview
+      statTotalRows.innerText = outRows.length;
+      statMatchedRows.innerText = matchedCount;
+      const rate = outRows.length > 0 ? ((matchedCount / outRows.length) * 100).toFixed(1) : 0;
+      statMatchRate.innerText = `${rate}%`;
+      statUnmatchedRows.innerText = unmatchedCount;
+
+      cntFilterAll.innerText = outRows.length;
+      cntFilterMatched.innerText = matchedCount;
+      cntFilterUnmatched.innerText = unmatchedCount;
+
+      renderPreviewTable();
+
+      sectionMergeResults.classList.remove('hidden');
+      sectionMergeResults.scrollIntoView({ behavior: 'smooth' });
+
+      mergeStatusIcon.innerText = '✅';
+      mergeStatusText.innerText = `Merge complete! ${matchedCount} of ${outRows.length} mobile numbers matched successfully.`;
+    } catch (err) {
+      console.error(err);
+      alert('Error during merge: ' + err.message);
+      mergeStatusIcon.innerText = '⚠️';
+      mergeStatusText.innerText = 'Error: ' + err.message;
+    } finally {
+      btnRunMerge.disabled = false;
+      btnRunMerge.innerHTML = '<span>⚡</span> Match &amp; Merge Mobile Numbers';
+    }
+  });
+
+  // Table Rendering with Filters and Search
+  function renderPreviewTable() {
+    if (!mergedData) return;
+
+    const searchTerm = (inputSearchTable.value || '').trim().toLowerCase();
+
+    // Render Table Header
+    previewTableHead.innerHTML = `<tr>${mergedData.headers.map((h, idx) => {
+      const isMobile = idx === mergedData.headers.length - 1;
+      return `<th class="${isMobile ? 'col-mobile-hdr' : ''}">${escapeHtml(h)}</th>`;
+    }).join('')}<th>Status</th></tr>`;
+
+    // Filter Rows
+    const filteredRows = mergedData.rows.filter(item => {
+      // 1. Status Filter
+      if (currentFilter === 'matched' && item.status !== 'matched') return false;
+      if (currentFilter === 'unmatched' && item.status !== 'unmatched') return false;
+
+      // 2. Search Filter
+      if (searchTerm) {
+        const rowStr = item.data.join(' ').toLowerCase();
+        if (!rowStr.includes(searchTerm)) return false;
+      }
+      return true;
+    });
+
+    // Render Table Body
+    if (filteredRows.length === 0) {
+      previewTableBody.innerHTML = `<tr><td colspan="${mergedData.headers.length + 1}" style="text-align: center; padding: 30px; color: var(--text-muted);">No records found matching current filter or search.</td></tr>`;
+      return;
+    }
+
+    previewTableBody.innerHTML = filteredRows.map(item => {
+      const cells = item.data.map((val, idx) => {
+        const isMobile = idx === item.data.length - 1;
+        if (isMobile) {
+          return `<td class="col-mobile-val">${escapeHtml(val || '—')}</td>`;
+        }
+        return `<td>${escapeHtml(val || '')}</td>`;
+      }).join('');
+
+      const statusBadge = item.status === 'matched'
+        ? `<span class="badge-matched">✅ Matched</span>`
+        : `<span class="badge-unmatched">⚠️ Unmatched</span>`;
+
+      return `<tr>${cells}<td>${statusBadge}</td></tr>`;
+    }).join('');
+  }
+
+  // Filter Buttons
+  btnFilterAll.addEventListener('click', () => { setFilter('all', btnFilterAll); });
+  btnFilterMatched.addEventListener('click', () => { setFilter('matched', btnFilterMatched); });
+  btnFilterUnmatched.addEventListener('click', () => { setFilter('unmatched', btnFilterUnmatched); });
+
+  function setFilter(filter, activeBtn) {
+    currentFilter = filter;
+    [btnFilterAll, btnFilterMatched, btnFilterUnmatched].forEach(b => b.classList.remove('active'));
+    activeBtn.classList.add('active');
+    renderPreviewTable();
+  }
+
+  inputSearchTable.addEventListener('input', () => {
+    renderPreviewTable();
+  });
+
+  // Download Excel (.xlsx)
+  btnDownloadExcel.addEventListener('click', () => {
+    if (!mergedData) return;
+
+    const aoa = [mergedData.headers];
+    mergedData.rows.forEach(item => aoa.push(item.data));
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Set Column Widths
+    ws['!cols'] = mergedData.headers.map((h, i) => {
+      if (i === mergedData.headers.length - 1) return { wch: 28 }; // Mobile Number
+      if (h.toLowerCase().includes('name')) return { wch: 24 };
+      if (h.toLowerCase().includes('roll')) return { wch: 14 };
+      return { wch: 12 };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Result_With_Mobile");
+
+    const filename = (resultFileData ? resultFileData.name.replace(/\.[^/.]+$/, "") : "RESULT") + "_WITH_MOBILE.xlsx";
+    XLSX.writeFile(wb, filename);
+  });
+
+  // Download CSV
+  btnDownloadCsv.addEventListener('click', () => {
+    if (!mergedData) return;
+
+    const aoa = [mergedData.headers];
+    mergedData.rows.forEach(item => aoa.push(item.data));
+
+    const csvContent = aoa.map(row => 
+      row.map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (resultFileData ? resultFileData.name.replace(/\.[^/.]+$/, "") : "RESULT") + "_WITH_MOBILE.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+

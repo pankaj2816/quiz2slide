@@ -15,8 +15,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- PptxGenJS CDN (Client-side PowerPoint Presentation Generator) -->
   <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <!-- SheetJS CDN (Client-side Excel & SpreadsheetML Parser & Writer) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Embedded Default Template Base64 -->
-  <script src="chalkboard_b64.js?v=13.0"></script>
+  <script src="chalkboard_b64.js?v=14.0"></script>
 </head>
 <body>
 
@@ -27,19 +29,33 @@
         <span class="logo-icon">📊</span>
         <div>
           <h1>Quiz2Slide <span>Studio</span></h1>
-          <p class="tagline">Smart PDF Quiz to PowerPoint Presentation Generator (100% Client-Side / GitHub Pages)</p>
+          <p class="tagline">Smart PDF Quiz to PowerPoint & School Result Sheet Processor (100% Client-Side)</p>
         </div>
       </div>
       <div class="header-actions">
-        <span class="revision-badge" id="revBadge">🏷️ Rev 13.0 (Dual-Zone Question &amp; Option Area Selector)</span>
+        <span class="revision-badge" id="revBadge">🏷️ Rev 14.0 (Result &amp; Mobile Merger + Dual-Zone)</span>
         <span class="status-badge" id="appStatus">● 100% Private (Runs in Browser)</span>
       </div>
     </div>
   </header>
 
+  <!-- Navigation Bar -->
+  <nav class="app-nav">
+    <div class="nav-container">
+      <button class="nav-tab active" id="tabQuizToPpt">
+        <span class="nav-icon">📊</span> Quiz to PowerPoint Studio
+      </button>
+      <button class="nav-tab" id="tabResultMerger">
+        <span class="nav-icon">📑</span> Result &amp; Mobile Number Merger <span class="tab-badge">NEW</span>
+      </button>
+    </div>
+  </nav>
+
   <!-- Main Container -->
   <main class="container">
 
+    <!-- View 1: Quiz to PPT Studio -->
+    <div id="viewQuizStudio" class="app-view active">
     <!-- Step 1: Upload Documents -->
     <section class="card step-card">
       <div class="step-header">
@@ -371,9 +387,162 @@
         </div>
       </div>
     </section>
+    </div> <!-- /viewQuizStudio -->
+
+    <!-- View 2: Result & Mobile Number Merger -->
+    <div id="viewResultMerger" class="app-view" style="display: none;">
+      
+      <!-- Merger Step 1: Upload Both Sheets -->
+      <section class="card step-card">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div>
+            <h2>Upload Result Sheet &amp; Crystal Report Viewer</h2>
+            <p>Upload your class result sheet and student master list / Crystal Report. Supports <code>.xls</code> (SpreadsheetML), <code>.xlsx</code>, and <code>.csv</code>.</p>
+          </div>
+        </div>
+
+        <div class="upload-grid">
+          <!-- Result Sheet Dropzone -->
+          <div class="dropzone" id="resultDropzone">
+            <input type="file" id="inputResultFile" accept=".xls,.xlsx,.csv" class="file-input">
+            <div class="dropzone-content">
+              <span class="drop-icon">📋</span>
+              <h3>1. Upload Result Sheet</h3>
+              <p class="drop-help" id="resultFileLabel">Drag &amp; drop or click (e.g. 6TH CLASS RESULT.xls)</p>
+            </div>
+          </div>
+
+          <!-- Crystal Report Dropzone -->
+          <div class="dropzone" id="crystalDropzone">
+            <input type="file" id="inputCrystalFile" accept=".xlsx,.xls,.csv" class="file-input">
+            <div class="dropzone-content">
+              <span class="drop-icon">📑</span>
+              <h3>2. Upload Crystal Report Viewer</h3>
+              <p class="drop-help" id="crystalFileLabel">Drag &amp; drop or click (e.g. CrystalReportViewer1.xlsx)</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Merger Step 2: Configure & Execute Merge -->
+      <section class="card step-card">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div>
+            <h2>Matching Rules &amp; Merge Execution</h2>
+            <p>Configure number normalization and match Adm Number with Roll Number.</p>
+          </div>
+        </div>
+
+        <div class="merger-config-grid">
+          <div class="config-card">
+            <label class="toggle-control">
+              <input type="checkbox" id="chkStripZeros" checked>
+              <span class="toggle-track"></span>
+              <span class="toggle-label">
+                <strong>Ignore leading zeros</strong>
+                <small>Normalizes <code>0011788</code> ➔ <code>11788</code> and <code>0005953</code> ➔ <code>5953</code></small>
+              </span>
+            </label>
+          </div>
+
+          <div class="config-card">
+            <label class="toggle-control">
+              <input type="checkbox" id="chkSmartNameFallback">
+              <span class="toggle-track"></span>
+              <span class="toggle-label">
+                <strong>Smart Name Fallback</strong>
+                <small>Optionally match by Student Name if Roll No has OMR errors (e.g. <code>1067*</code>)</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="config-card info-card">
+            <span class="info-icon">💡</span>
+            <div>
+              <strong>Column Placement: End of Sheet</strong>
+              <small>New column <code>Mobile Number</code> will be placed after <code>TOTAL</code>.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="generator-footer" style="margin-top: 20px;">
+          <div class="status-box" id="mergeStatusBox">
+            <span class="status-icon" id="mergeStatusIcon">⚡</span>
+            <span id="mergeStatusText">Please upload both sheets to start matching.</span>
+          </div>
+          <button class="btn btn-success btn-lg" id="btnRunMerge" disabled>
+            <span>⚡</span> Match &amp; Merge Mobile Numbers
+          </button>
+        </div>
+      </section>
+
+      <!-- Merger Step 3: Statistics & Interactive Table Preview -->
+      <section class="card step-card hidden" id="sectionMergeResults">
+        <div class="step-header">
+          <div class="step-num">3</div>
+          <div>
+            <h2>Merged Result &amp; Mobile Number Preview</h2>
+            <p>Review the merged data table and download the final Excel / CSV file.</p>
+          </div>
+          <div class="flex-gap" style="margin-left: auto;">
+            <button class="btn btn-primary" id="btnDownloadExcel">
+              <span>📥</span> Download Excel (.xlsx)
+            </button>
+            <button class="btn btn-secondary" id="btnDownloadCsv">
+              <span>📄</span> Download CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Metric Stat Cards -->
+        <div class="metric-grid">
+          <div class="metric-card">
+            <span class="metric-val" id="statTotalRows">0</span>
+            <span class="metric-lbl">Total Result Rows</span>
+          </div>
+          <div class="metric-card metric-success">
+            <span class="metric-val" id="statMatchedRows">0</span>
+            <span class="metric-lbl">✅ Mobile Numbers Matched</span>
+          </div>
+          <div class="metric-card metric-rate">
+            <span class="metric-val" id="statMatchRate">0%</span>
+            <span class="metric-lbl">🎯 Match Success Rate</span>
+          </div>
+          <div class="metric-card metric-warning">
+            <span class="metric-val" id="statUnmatchedRows">0</span>
+            <span class="metric-lbl">⚠️ Unmatched Rows</span>
+          </div>
+        </div>
+
+        <!-- Table Filter & Search Controls -->
+        <div class="table-controls-bar">
+          <div class="filter-tabs">
+            <button class="filter-btn active" id="btnFilterAll">All Students (<span id="cntFilterAll">0</span>)</button>
+            <button class="filter-btn" id="btnFilterMatched">✅ Matched (<span id="cntFilterMatched">0</span>)</button>
+            <button class="filter-btn" id="btnFilterUnmatched">⚠️ Unmatched (<span id="cntFilterUnmatched">0</span>)</button>
+          </div>
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="inputSearchTable" placeholder="Search student name, roll no, mobile...">
+          </div>
+        </div>
+
+        <!-- Scrollable Table Container -->
+        <div class="data-table-wrapper" id="dataTableWrapper">
+          <table class="data-table" id="previewDataTable">
+            <thead id="previewTableHead"></thead>
+            <tbody id="previewTableBody"></tbody>
+          </table>
+        </div>
+
+      </section>
+
+    </div> <!-- /viewResultMerger -->
 
   </main>
 
-  <script src="app.js?v=13.0"></script>
+  <script src="app.js?v=14.0"></script>
 </body>
 </html>
