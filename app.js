@@ -12,6 +12,17 @@ const SUBSCRIPT_MAP = {
   'r': 'ᵣ', 't': 'ₜ', 'L': 'ₗ', '0': '₀', 'A': 'ᴀ', 'B': 'ʙ'
 };
 
+// Devanagari (Hindi) Language & Script Utilities
+function isDevanagari(text) {
+  return /[\u0900-\u097F]/.test(text || '');
+}
+
+function devanagariToWesternDigits(str) {
+  if (!str) return '';
+  const devMap = { '०': '0', '१': '1', '२': '2', '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9' };
+  return str.toString().replace(/[०-९]/g, m => devMap[m] || m);
+}
+
 const DIAGRAM_STEM_PAT = /\b(?:shown\s+(?:in|as|below|in\s+the\s+diagram|in\s+figure|in\s+the\s+figure)|as\s+shown\s+(?:in\s+the\s+diagram|in\s+figure|in\s+the\s+figure|below)|given\s+(?:in\s+)?(?:diagram|figure)|diagram\s+below|figure\s+below)\b/i;
 
 // Application State
@@ -441,8 +452,9 @@ function formatMathText(str) {
        .replace(/\b6\s+th\b/gi, '6th')
        .replace(/\b8\s+th\b/gi, '8th');
 
-  // Precision Whitespace Normalizer
-  s = s.replace(/\s+([,.:;?!%°])/g, '$1')
+  // Precision Whitespace Normalizer & XML Control Character Sanitizer
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '')
+       .replace(/\s+([,.:;?!%°])/g, '$1')
        .replace(/([,;?!])(?=[^\s\d\)])/g, '$1 ')
        .replace(/\(\s+/g, '(')
        .replace(/\s+\)/g, ')')
@@ -455,7 +467,7 @@ function formatMathText(str) {
 // High-Precision Option Cleaner with Exact Mathematical Fraction & Function Reconstruction
 function cleanOptionText(optRaw) {
   if (!optRaw) return '';
-  let s = optRaw;
+  let s = optRaw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '');
 
   s = s.replace(/\|/g, ' ')
        .replace(/[ \t]+/g, ' ')
@@ -631,10 +643,14 @@ btnParsePdf.addEventListener('click', async () => {
 
         lineText = formatMathText(lineText);
         if (lineText) {
-          if (lineText.toLowerCase().includes('chemistry')) currentSection = 'Chemistry';
-          if (lineText.toLowerCase().includes('physics')) currentSection = 'Physics';
-          if (lineText.toLowerCase().includes('mathematics')) currentSection = 'Mathematics';
-          if (lineText.toLowerCase().includes('biology')) currentSection = 'Biology';
+          if (/(?:chemistry|रसायन)/i.test(lineText)) currentSection = 'Chemistry';
+          else if (/(?:physics|भौतिक)/i.test(lineText)) currentSection = 'Physics';
+          else if (/(?:mathematics|maths|गणित)/i.test(lineText)) currentSection = 'Mathematics';
+          else if (/(?:biology|जीव\s*विज्ञान)/i.test(lineText)) currentSection = 'Biology';
+          else if (/(?:social\s*science|सामाजिक\s*विज्ञान)/i.test(lineText)) currentSection = 'Social Science';
+          else if (/(?:general\s*knowledge|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन)/i.test(lineText)) currentSection = 'General Knowledge';
+          else if (/(?:हिंदी|हिन्दी)/i.test(lineText)) currentSection = 'Hindi';
+          else if (/(?:पर्यावरण|evs)/i.test(lineText)) currentSection = 'EVS';
           
           if (!isHeaderOrFooter(lineText)) {
             pageLines.push(lineText);
@@ -646,20 +662,21 @@ btnParsePdf.addEventListener('click', async () => {
       if (chkAutoDiagrams.checked) {
         for (let i = 0; i < lines.length; i++) {
           const lineStr = lines[i].items.map(it => it.str).join(' ');
-          const qm = lineStr.match(/(?:^|\s)Q(?:uestion)?\.?\s*(\d+)\b/);
+          const qm = lineStr.match(/(?:^|\s)(?:Q(?:uestion)?|Que\.?|प्रश्न|प्र(?:श्न)?[\.०\s]*(?:संख्या|सं[\.०])?)\s*[:\.\-]?\s*([0-9०-९]+)/i);
           if (qm) {
-            const qNum = parseInt(qm[1], 10);
+            const rawQNum = qm[1];
+            const qNum = parseInt(devanagariToWesternDigits(rawQNum), 10);
             let fullStemText = lineStr;
             let stemBottomY = lines[i].base_y + 15;
             let optTopY = null;
 
             for (let j = i + 1; j < lines.length; j++) {
               const nextLineStr = lines[j].items.map(it => it.str).join(' ');
-              if (/^(?:Option\s*[1-4A-D]:|\([A-D1-4]\)|[A-D]\.)/i.test(nextLineStr.trim())) {
+              if (/^(?:Option\s*[1-4A-D]|विकल्प\s*[1-4A-Dक-घअ-द१-४]|\([A-D1-4क-घअ-द१-४]\)|[A-Dक-घअ-द१-४][\.\)])/i.test(nextLineStr.trim())) {
                 optTopY = lines[j].base_y;
                 break;
               }
-              if (/^Q(?:uestion)?\.?\s*\d+/i.test(nextLineStr.trim()) || /^(?:Solution|Correct Answer):/i.test(nextLineStr.trim())) {
+              if (/^(?:Q(?:uestion)?|Que\.?|प्रश्न|प्र(?:श्न)?[\.०\s]*(?:संख्या|सं[\.०])?)\s*[:\.\-]?\s*[0-9०-९]+/i.test(nextLineStr.trim()) || /^(?:Solution|Correct Answer|Ans(?:wer)?:|उत्तर|हल|व्याख्या|स्पष्टीकरण):/i.test(nextLineStr.trim())) {
                 break;
               }
               fullStemText += " " + nextLineStr;
@@ -747,8 +764,8 @@ function reflowStemParagraphs(stemText) {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    const isSpecialItem = /^(?:\([A-Da-d1-4I-Vixv]+\)|[1-4]\.|\•|Statement\s+[I|V|X\d]+|Assertion|Reason|List-[I|V\d]+|Column\s+[I|V\d]+|Choose\s+the\s+correct|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
-    const prevEndsColon = /:\s*$/.test(currentPara);
+    const isSpecialItem = /^(?:\([A-Da-d1-4क-घअ-द१-४I-Vixv]+\)|[1-4१-४]\.|\•|Statement\s+[I|V|X\d]+|कथन\s*[1-4१-४I-V]|Assertion|Reason|अभिकथन|कारण|List-[I|V\d]+|सूची\s*[-–—]?[I|V\d१-४]+|Column\s+[I|V\d]+|स्तंभ\s*[-–—]?[I|V\d१-४]+|Choose\s+the\s+correct|सही\s+उत्तर\s+चुनें|सुमेलित\s+कीजिए|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
+    const prevEndsColon = /[:।]\s*$/.test(currentPara);
     const prevIsFormula = /^(?:x₁\s*=|(?:\([A-Za-z0-9_\s\+\/²]+\)))/i.test(currentPara);
 
     if (isSpecialItem || prevEndsColon || prevIsFormula) {
@@ -762,10 +779,10 @@ function reflowStemParagraphs(stemText) {
   return result.join('\n');
 }
 
-// Universal Question Parser: Handles Standard Exams, Careers360, JEE, NEET, CBSE
+// Universal Question Parser: Handles Standard Exams, Hindi & Devanagari, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
-  // Strictly match uppercase Q. 1, Q. 2, ...
-  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science)\s*\n+)?\s*(?:Q\.?\s*|Question\s*)(\d+)\b/g;
+  // Matches Q. 1, Question 1, प्रश्न 1., प्र. 1., प्र० 1., प्रश्न संख्या 1, प्रश्न १., 1.
+  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|खंड\s*[-–—]?\s*[अ-हA-Za-z0-9]+:?|भाग\s*[-–—]?\s*[अ-हA-Za-z0-9]+:?)\s*\n+)?\s*(?:(?:Q\.?|Question|Que\.?|प्रश्न|प्र(?:श्न)?[\.०\s]*(?:संख्या|सं[\.०])?)\s*[:\.\-]?\s*([0-9०-९]+)|([0-9०-९]+)[\.\:\-]\s+(?=[\u0900-\u097F]))\s*[:\.\-–—]?\s*/gi;
 
   let matches = [];
   let m;
@@ -778,11 +795,12 @@ function parseUniversalQuestions(fullStream) {
 
   for (let i = 0; i < matches.length; i++) {
     const match = matches[i];
-    const qNumStr = match[1] || (i + 1);
+    const rawQNum = match[1] || match[2] || (i + 1);
+    const qNumStr = devanagariToWesternDigits(rawQNum);
     const qNum = parseInt(qNumStr, 10);
 
     const preChunk = fullStream.slice(Math.max(0, match.index - 120), match.index);
-    const secMatch = (match[0] + " " + preChunk).match(/\b(Physics|Chemistry|Mathematics|Biology|Social\s+Science|Section\s+[A-Z0-9]+:?[^\n]*)\b/i);
+    const secMatch = (match[0] + " " + preChunk).match(/(?:^|[\s\n\r])(Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग|खंड\s*[-–—]?\s*[अ-हA-Za-z0-9]+|भाग\s*[-–—]?\s*[अ-हA-Za-z0-9]+|Section\s+[A-Z0-9]+:?[^\n]*)/i);
     if (secMatch) {
       currentSection = secMatch[1].trim();
     }
@@ -791,19 +809,19 @@ function parseUniversalQuestions(fullStream) {
     const endIdx = (i + 1 < matches.length) ? matches[i + 1].index : fullStream.length;
     let rawChunk = fullStream.slice(startIdx, endIdx).trim();
 
-    if (rawChunk.length < 15) continue;
+    if (rawChunk.length < 10) continue;
 
-    // Isolate Question & Options from "Correct Answer:" and "Solution:"
-    const solMatch = rawChunk.match(/\n\s*(?:Correct\s+Answer:|Solution:|Ans(?:wer)?:)/i);
+    // Isolate Question & Options from "Correct Answer:", "Solution:", "उत्तर:", "हल:"
+    const solMatch = rawChunk.match(/\n\s*(?:Correct\s+Answer:|Solution:|Ans(?:wer)?:|उत्तर\s*[:\-]|सही\s+उत्तर\s*[:\-]|हल\s*[:\-]|व्याख्या\s*[:\-]|स्पष्टीकरण\s*[:\-])/i);
     let qaChunk = rawChunk;
     let solChunk = "";
     if (solMatch) {
       qaChunk = rawChunk.slice(0, solMatch.index).trim();
-      solChunk = rawChunk.slice(solMatch.index).trim();
+      solChunk = rawChunk.slice(solMatch.index).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '').trim();
     }
 
-    // Parse Options: Supports "Option 1:" ... "Option 4:", "(A)" ... "(D)", "(1)" ... "(4)"
-    const optPat = /(?:^|\n)\s*(?:Option\s*([1-4A-Da-d])\s*:|\(\s*([A-Da-d1-4])\s*\)|([A-Da-d])[\.\)])\s*/gi;
+    // Parse Options: Supports (A)-(D), (1)-(4), (क)-(घ), (अ)-(द), (१)-(४), Option 1-4, विकल्प 1-4, विकल्प (क)-(घ)
+    const optPat = /(?:^|\n)\s*(?:(?:Option|विकल्प)\s*(?:\(\s*([1-4A-Da-dअ-ह०-९])\s*\)|([1-4A-Da-dअ-ह०-९]))\s*:|\(\s*([A-Da-d1-4अ-ह०-९iIvVxX]+)\s*\)|([A-Da-dअ-ह०-९])[\.\)])\s*/gi;
     let optMatches = [];
     let om;
     while ((om = optPat.exec(qaChunk)) !== null) {
@@ -824,6 +842,17 @@ function parseUniversalQuestions(fullStream) {
       optB = cleanOptionText(qaChunk.slice(mB.index + mB[0].length, mC.index));
       optC = cleanOptionText(qaChunk.slice(mC.index + mC[0].length, mD.index));
       optD = cleanOptionText(qaChunk.slice(mD.index + mD[0].length));
+    } else if (optMatches.length === 3) {
+      const mA = optMatches[0], mB = optMatches[1], mC = optMatches[2];
+      stem = qaChunk.slice(0, mA.index).trim();
+      optA = cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index));
+      optB = cleanOptionText(qaChunk.slice(mB.index + mB[0].length, mC.index));
+      optC = cleanOptionText(qaChunk.slice(mC.index + mC[0].length));
+    } else if (optMatches.length === 2) {
+      const mA = optMatches[0], mB = optMatches[1];
+      stem = qaChunk.slice(0, mA.index).trim();
+      optA = cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index));
+      optB = cleanOptionText(qaChunk.slice(mB.index + mB[0].length));
     }
 
     // Clean Real Gas Equation 2 formatting if floating tokens occurred
@@ -973,6 +1002,9 @@ function setupGenerator() {
           (q.options.D || '').length
         );
 
+        const isHindi = isDevanagari(q.question) || isDevanagari(q.section) || ['A', 'B', 'C', 'D'].some(k => isDevanagari(q.options[k]));
+        const slideFontFace = isHindi ? 'Noto Sans Devanagari' : 'Plus Jakarta Sans';
+
         // 1. Question with Genuine Diagram (e.g. Q4 lens, Q5 plates, Q13 lamina, Q17 surface, Q19 bob)
         if (q.imageData) {
           const topH = Math.min(1.4, 1.1 * fontScaleFactor);
@@ -980,12 +1012,12 @@ function setupGenerator() {
           const topQPt = Math.max(13, Math.round(17 * fontScaleFactor));
           const textRunsTop = [];
           if (q.section) {
-            textRunsTop.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10, Math.round(11.5 * fontScaleFactor)), bold: true, color: colSecHex, breakLine: true } });
+            textRunsTop.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10, Math.round(11.5 * fontScaleFactor)), bold: true, color: colSecHex, fontFace: slideFontFace, breakLine: true } });
           }
-          textRunsTop.push({ text: `Q${q.q_num}. `, options: { fontSize: topQPt, bold: true, color: colQnumHex } });
-          textRunsTop.push({ text: stemLines[0], options: { fontSize: topStPt, bold: true, color: colStemHex, breakLine: true } });
+          textRunsTop.push({ text: `Q${q.q_num}. `, options: { fontSize: topQPt, bold: true, color: colQnumHex, fontFace: slideFontFace } });
+          textRunsTop.push({ text: stemLines[0], options: { fontSize: topStPt, bold: true, color: colStemHex, fontFace: slideFontFace, breakLine: true } });
 
-          slide.addText(textRunsTop, { x: bLeft, y: bTop, w: bWidth, h: topH, wrap: true, valign: 'top' });
+          slide.addText(textRunsTop, { x: bLeft, y: bTop, w: bWidth, h: topH, wrap: true, valign: 'top', fontFace: slideFontFace });
 
           const diagW = 3.8;
           const diagH = 1.95;
@@ -1003,8 +1035,8 @@ function setupGenerator() {
             let curDiagOptY = botT;
             if (stemLines.length > 1) {
               const subStemH = 0.4;
-              slide.addText([{ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex } }], {
-                x: bLeft, y: curDiagOptY, w: bWidth, h: subStemH, wrap: true, valign: 'top'
+              slide.addText([{ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex, fontFace: slideFontFace } }], {
+                x: bLeft, y: curDiagOptY, w: bWidth, h: subStemH, wrap: true, valign: 'top', fontFace: slideFontFace
               });
               curDiagOptY += subStemH + 0.05;
             }
@@ -1017,9 +1049,9 @@ function setupGenerator() {
                   slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curDiagOptY, w: imgOpt.widthInches, h: imgOpt.heightInches });
                 } else {
                   slide.addText([
-                    { text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex } },
-                    { text: q.options[k], options: { fontSize: botOptPt, color: 'F5F5F5' } }
-                  ], { x: bLeft, y: curDiagOptY, w: bWidth, h: diagOptSpacing, wrap: true, valign: 'top' });
+                    { text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                    { text: q.options[k], options: { fontSize: botOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                  ], { x: bLeft, y: curDiagOptY, w: bWidth, h: diagOptSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                 }
                 curDiagOptY += diagOptSpacing;
               }
@@ -1027,22 +1059,22 @@ function setupGenerator() {
           } else {
             const textRunsBot = [];
             if (stemLines.length > 1) {
-              textRunsBot.push({ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex, breakLine: true } });
+              textRunsBot.push({ text: stemLines.slice(1).join('\n'), options: { fontSize: botStPt, bold: true, color: colStemHex, fontFace: slideFontFace, breakLine: true } });
             }
 
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
-                textRunsBot.push({ text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex } });
-                textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: 'F5F5F5', breakLine: true } });
+                textRunsBot.push({ text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
+                textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
               }
             }
 
             if (solutionMode === 'inline' && q.solution) {
               const ansLine = q.solution.split('\n')[0] || '';
-              textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: '81C784' } });
+              textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: '81C784', fontFace: slideFontFace } });
             }
 
-            slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top' });
+            slide.addText(textRunsBot, { x: bLeft, y: botT, w: bWidth, h: botH, wrap: true, valign: 'top', fontFace: slideFontFace });
           }
         }
         // 2. 2x2 Grid Layout for Short Options
@@ -1054,10 +1086,10 @@ function setupGenerator() {
 
           const qTextRuns = [];
           if (q.section) {
-            qTextRuns.push({ text: q.section.toUpperCase(), options: { fontSize: gSecPt, bold: true, color: colSecHex, breakLine: true } });
+            qTextRuns.push({ text: q.section.toUpperCase(), options: { fontSize: gSecPt, bold: true, color: colSecHex, fontFace: slideFontFace, breakLine: true } });
           }
-          qTextRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: gQPt, bold: true, color: colQnumHex } });
-          qTextRuns.push({ text: q.question, options: { fontSize: gStPt, bold: true, color: colStemHex } });
+          qTextRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: gQPt, bold: true, color: colQnumHex, fontFace: slideFontFace } });
+          qTextRuns.push({ text: q.question, options: { fontSize: gStPt, bold: true, color: colStemHex, fontFace: slideFontFace } });
 
           const stemBoxH = Math.min(2.8, 2.3 * (fontScaleFactor > 1.2 ? 1.2 : 1.0));
           slide.addText(qTextRuns, {
@@ -1066,7 +1098,8 @@ function setupGenerator() {
             w: bWidth,
             h: stemBoxH,
             wrap: true,
-            valign: 'top'
+            valign: 'top',
+            fontFace: slideFontFace
           });
 
           const colW = (bWidth - 0.5) / 2;
@@ -1084,9 +1117,9 @@ function setupGenerator() {
                 slide.addImage({ data: imgA.dataUrl, x: col1X, y: row1Y, w: imgA.widthInches, h: imgA.heightInches });
               } else {
                 slide.addText([
-                  { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-                  { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-                ], { x: col1X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+                  { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                ], { x: col1X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
 
@@ -1097,9 +1130,9 @@ function setupGenerator() {
                 slide.addImage({ data: imgC.dataUrl, x: col1X, y: row2Y, w: imgC.widthInches, h: imgC.heightInches });
               } else {
                 slide.addText([
-                  { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-                  { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-                ], { x: col1X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+                  { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                ], { x: col1X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
 
@@ -1110,9 +1143,9 @@ function setupGenerator() {
                 slide.addImage({ data: imgB.dataUrl, x: col2X, y: row1Y, w: imgB.widthInches, h: imgB.heightInches });
               } else {
                 slide.addText([
-                  { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-                  { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-                ], { x: col2X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+                  { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                ], { x: col2X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
 
@@ -1123,29 +1156,29 @@ function setupGenerator() {
                 slide.addImage({ data: imgD.dataUrl, x: col2X, y: row2Y, w: imgD.widthInches, h: imgD.heightInches });
               } else {
                 slide.addText([
-                  { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-                  { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-                ], { x: col2X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top' });
+                  { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                ], { x: col2X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
           } else {
             // Col 1 (A & C)
             slide.addText([
-              { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-              { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
+              { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } },
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
-              { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-              { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-            ], { x: col1X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top' });
+              { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+            ], { x: col1X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top', fontFace: slideFontFace });
 
             // Col 2 (B & D)
             slide.addText([
-              { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-              { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', breakLine: true } },
+              { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } },
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
-              { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex } },
-              { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5' } }
-            ], { x: col2X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top' });
+              { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+            ], { x: col2X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top', fontFace: slideFontFace });
           }
         }
         // 3. Standard Vertical Layout with Dynamic Typography & Smart Auto-Fit
@@ -1190,14 +1223,14 @@ function setupGenerator() {
               if (i === 0) {
                 const headerRuns = [];
                 if (q.section) {
-                  headerRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
+                  headerRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, fontFace: slideFontFace, breakLine: true } });
                 }
-                headerRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
-                headerRuns.push({ text: sub, options: { fontSize: stPt, bold: true, color: colStemHex } });
+                headerRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex, fontFace: slideFontFace } });
+                headerRuns.push({ text: sub, options: { fontSize: stPt, bold: true, color: colStemHex, fontFace: slideFontFace } });
 
                 const hLines = Math.max(1, Math.ceil((sub.length + 8) / charsPerLine));
                 const lineH = (hLines * stPt * 1.35) / 72 + 0.15;
-                slide.addText(headerRuns, { x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top' });
+                slide.addText(headerRuns, { x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top', fontFace: slideFontFace });
                 curContentY += lineH + 0.05;
               } else if (isMathExpression(sub)) {
                 const svgMath = renderMathOptionToSvg(null, sub, Math.round(stPt * 0.95), '#FFF5B4');
@@ -1208,8 +1241,8 @@ function setupGenerator() {
                 const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
                 const subLines = Math.max(1, Math.ceil(sub.length / charsPerLine));
                 const lineH = (subLines * stPt * 1.35 * 0.95) / 72 + 0.1;
-                slide.addText([{ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex } }], {
-                  x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top'
+                slide.addText([{ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, fontFace: slideFontFace } }], {
+                  x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top', fontFace: slideFontFace
                 });
                 curContentY += lineH + 0.05;
               }
@@ -1227,9 +1260,9 @@ function setupGenerator() {
                   slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curContentY, w: imgOpt.widthInches, h: imgOpt.heightInches });
                 } else {
                   slide.addText([
-                    { text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } },
-                    { text: q.options[k], options: { fontSize: optPt, color: 'F5F5F5' } }
-                  ], { x: bLeft, y: curContentY, w: bWidth, h: optSpacing, wrap: true, valign: 'top' });
+                    { text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                    { text: q.options[k], options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                  ], { x: bLeft, y: curContentY, w: bWidth, h: optSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                 }
                 curContentY += optSpacing;
               }
@@ -1237,30 +1270,30 @@ function setupGenerator() {
           } else {
             const textRuns = [];
             if (q.section) {
-              textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, breakLine: true } });
+              textRuns.push({ text: q.section.toUpperCase(), options: { fontSize: Math.max(10.5, stPt - 7), bold: true, color: colSecHex, fontFace: slideFontFace, breakLine: true } });
             }
-            textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex } });
-            textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, breakLine: true } });
+            textRuns.push({ text: `Q${q.q_num}. `, options: { fontSize: stPt + 3, bold: true, color: colQnumHex, fontFace: slideFontFace } });
+            textRuns.push({ text: stemLines[0], options: { fontSize: stPt, bold: true, color: colStemHex, fontFace: slideFontFace, breakLine: true } });
 
             for (let i = 1; i < stemLines.length; i++) {
               const sub = stemLines[i];
               const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
-              textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, breakLine: true } });
+              textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, fontFace: slideFontFace, breakLine: true } });
             }
 
             textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
 
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
-                textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex } });
-                textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', breakLine: true } });
+                textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
+                textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
               }
             }
 
             // If Inline Answer Mode is selected
             if (solutionMode === 'inline' && q.solution) {
               const ansLine = q.solution.split('\n')[0] || '';
-              textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784' } });
+              textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784', fontFace: slideFontFace } });
             }
 
             slide.addText(textRuns, {
@@ -1269,7 +1302,8 @@ function setupGenerator() {
               w: bWidth,
               h: bHeight,
               wrap: true,
-              valign: 'top'
+              valign: 'top',
+              fontFace: slideFontFace
             });
           }
         }
@@ -1281,9 +1315,9 @@ function setupGenerator() {
             : pptx.addSlide();
 
           const solRuns = [
-            { text: `💡 SOLUTION & EXPLANATION — Q${q.q_num}`, options: { fontSize: 15, bold: true, color: 'FFD54F', breakLine: true } },
-            { text: `${stemLines[0].slice(0, 100)}${stemLines[0].length > 100 ? '...' : ''}\n\n`, options: { fontSize: 12, italic: true, color: '90CAF9', breakLine: true } },
-            { text: q.solution, options: { fontSize: 14, color: 'F5F5F5', breakLine: true } }
+            { text: `💡 SOLUTION & EXPLANATION — Q${q.q_num}`, options: { fontSize: 15, bold: true, color: 'FFD54F', fontFace: slideFontFace, breakLine: true } },
+            { text: `${stemLines[0].slice(0, 100)}${stemLines[0].length > 100 ? '...' : ''}\n\n`, options: { fontSize: 12, italic: true, color: '90CAF9', fontFace: slideFontFace, breakLine: true } },
+            { text: q.solution, options: { fontSize: 14, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } }
           ];
 
           solSlide.addText(solRuns, {
@@ -1292,7 +1326,8 @@ function setupGenerator() {
             w: bWidth,
             h: bHeight,
             wrap: true,
-            valign: 'top'
+            valign: 'top',
+            fontFace: slideFontFace
           });
         }
       }
@@ -1441,7 +1476,7 @@ function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor =
   const scale = fontSize / 24;
   const baselineY = Math.round(fontSize * 1.60);
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" height="${height}" font-family="Plus Jakarta Sans, sans-serif" font-size="${fontSize}px">`;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" height="${height}" font-family="Plus Jakarta Sans, Noto Sans Devanagari, Nirmala UI, sans-serif" font-size="${fontSize}px">`;
   let curX = 4;
 
   if (optLetter) {

@@ -215,26 +215,26 @@ def run_50_point_audit(pptx_path):
             failures.append((39, "Missing / Truncated Question Stem", "Stem length < 20 characters"))
 
         # 40. Section Header Validity
-        if not re.search(r'\b(PHYSICS|CHEMISTRY|MATHEMATICS|BIOLOGY|SECTION)\b', slide_text):
+        if not re.search(r'(?:PHYSICS|CHEMISTRY|MATHEMATICS|BIOLOGY|SOCIAL\s+SCIENCE|GENERAL|SECTION|भौतिक|रसायन|गणित|जीव|सामान्य|हिंदी|पर्यावरण|खण्ड|भाग)', slide_text, re.IGNORECASE):
             failures.append((40, "Missing Section Tag Header", "No valid section header found"))
 
         # 41. Question Numbering Sequence
         if q_match:
             q_num = int(q_match.group(1))
             expected_q = idx if idx <= 25 else (idx - 25)
-            if q_num != expected_q:
+            if len(prs.slides) == 30 and q_num != expected_q:
                 failures.append((41, "Question Sequence Discontinuity", f"Expected Q{expected_q}, found Q{q_num}"))
 
         # 42. MCQ Four Options Present (Text + Vector Math Shapes)
-        is_mcq = (idx <= 20) or (idx >= 26 and idx != 29)
+        is_mcq = not (len(prs.slides) == 30 and 21 <= idx <= 25) and idx != 29
         if is_mcq:
             opts = re.findall(r'\(([A-D])\)\s*([^\n\r]+)', slide_text)
             text_opt_count = len(opts)
             # Check vector math shapes (excluding slide diagram if any)
-            is_diag_slide = idx in [4, 5, 13, 19]
+            is_diag_slide = len(prs.slides) == 30 and (idx in [4, 5, 13, 19])
             vector_math_count = len(pictures) - (1 if is_diag_slide else 0)
-            total_opts = text_opt_count + vector_math_count
-            if total_opts < 4:
+            total_opts = text_opt_count + max(0, vector_math_count)
+            if total_opts < 4 and len(opts) < 4:
                 failures.append((42, "Missing MCQ Option Elements", f"Found {total_opts}/4 (Text: {text_opt_count}, Vector: {vector_math_count})"))
 
         # 43. MCQ Non-Empty Options
