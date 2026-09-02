@@ -2600,10 +2600,12 @@ function setupResultMerger() {
 
       if (resRollIdx === -1) resRollIdx = 2; // Default fallback column 2
 
-      // Add 'Mobile Number' as the LAST column
-      const outHeaders = [...resHeaders, 'Mobile Number'];
-      const outRows = [];
+      // Insert 'Mobile Number' BEFORE Student Name column
+      const insertIdx = resNameIdx >= 0 ? resNameIdx : 1;
+      const outHeaders = [...resHeaders];
+      outHeaders.splice(insertIdx, 0, 'Mobile Number');
 
+      const outRows = [];
       let matchedCount = 0;
       let unmatchedCount = 0;
 
@@ -2638,7 +2640,8 @@ function setupResultMerger() {
           unmatchedCount++;
         }
 
-        rowVals.push(mobile);
+        // Insert mobile number BEFORE student name
+        rowVals.splice(insertIdx, 0, mobile);
         outRows.push({
           data: rowVals,
           status: status,
@@ -2652,6 +2655,7 @@ function setupResultMerger() {
       mergedData = {
         headers: outHeaders,
         rows: outRows,
+        insertIdx: insertIdx,
         matchedCount,
         unmatchedCount,
         totalCount: outRows.length
@@ -2691,10 +2695,11 @@ function setupResultMerger() {
     if (!mergedData) return;
 
     const searchTerm = (inputSearchTable.value || '').trim().toLowerCase();
+    const insertIdx = mergedData.insertIdx;
 
     // Render Table Header
     previewTableHead.innerHTML = `<tr>${mergedData.headers.map((h, idx) => {
-      const isMobile = idx === mergedData.headers.length - 1;
+      const isMobile = idx === insertIdx;
       return `<th class="${isMobile ? 'col-mobile-hdr' : ''}">${escapeHtml(h)}</th>`;
     }).join('')}<th>Status</th></tr>`;
 
@@ -2720,7 +2725,7 @@ function setupResultMerger() {
 
     previewTableBody.innerHTML = filteredRows.map(item => {
       const cells = item.data.map((val, idx) => {
-        const isMobile = idx === item.data.length - 1;
+        const isMobile = idx === insertIdx;
         if (isMobile) {
           return `<td class="col-mobile-val">${escapeHtml(val || '—')}</td>`;
         }
@@ -2762,7 +2767,7 @@ function setupResultMerger() {
 
     // Set Column Widths
     ws['!cols'] = mergedData.headers.map((h, i) => {
-      if (i === mergedData.headers.length - 1) return { wch: 28 }; // Mobile Number
+      if (i === mergedData.insertIdx) return { wch: 28 }; // Mobile Number
       if (h.toLowerCase().includes('name')) return { wch: 24 };
       if (h.toLowerCase().includes('roll')) return { wch: 14 };
       return { wch: 12 };
