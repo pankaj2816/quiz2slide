@@ -40,6 +40,7 @@ let state = {
     height_ratio: 0.77
   }
 };
+window.state = state;
 
 // DOM Elements
 const pdfDropzone = document.getElementById('pdfDropzone');
@@ -457,11 +458,66 @@ function formatMathText(str) {
 
   // Hindi & Devanagari Ligature & Orthographic Normalization
   if (/[\u0900-\u097F]/.test(s)) {
+    for (let pass = 0; pass < 3; pass++) {
+      s = s.replace(/([\u0900-\u097F])\s+([\u093A-\u094F\u0901-\u0903\u0951-\u0954\u093C])/g, '$1$2')
+           .replace(/्\s+([\u0900-\u097F])/g, '्$1');
+    }
+
     s = s.replace(/कि्\s*त|क\u093F्\s*त/g, 'क्ति')
          .replace(/सि्\s*म|स\u093F्\s*म/g, 'स्मि')
          .replace(/सि्\s*थ|स\u093F्\s*थ/g, 'स्थि')
          .replace(/निम्\s*नलिखित/g, 'निम्नलिखित')
          .replace(/व्यं\s*जन/g, 'व्यंजन')
+         .replace(/संज्ञ\s*ा/g, 'संज्ञा')
+         .replace(/संज्ञा\s+ओं/g, 'संज्ञाओं')
+         .replace(/व्य\s*ाकरण/g, 'व्याकरण')
+         .replace(/पक्ष\s*ी/g, 'पक्षी')
+         .replace(/मात्र\s*ा/g, 'मात्रा')
+         .replace(/उच्च\s*ारण/g, 'उच्चारण')
+         .replace(/जन्\s*मभूमि/g, 'जन्मभूमि')
+         .replace(/उल्\s*लास/g, 'उल्लास')
+         .replace(/ग्री\s*ष्म/g, 'ग्रीष्म')
+         .replace(/पश्च\s*ात/g, 'पश्चात')
+         .replace(/माहेश्व\s*री/g, 'माहेश्वरी')
+         .replace(/चरि\s*त्र/g, 'चरित्र')
+         .replace(/योगरू\s*ढ़|योग\s*रू\s*ढ़|योग\s*रूढ़/g, 'योगरूढ़')
+         .replace(/रू\s*ढ़|रूढ़/g, 'रूढ़')
+         .replace(/तद्भ\s*व/g, 'तद्भव')
+         .replace(/बि\s*हू/g, 'बिहू')
+         .replace(/कातिक/g, 'कार्तिक')
+         .replace(/फसली(?=[\s,।!?\)]|$)/g, 'फसलों')
+         .replace(/नववषी|नववष/g, 'नववर्ष')
+         .replace(/अंतगीत|अंतगत/g, 'अंतर्गत')
+         .replace(/निधारण/g, 'निर्धारण')
+         .replace(/दशाने/g, 'दर्शाने')
+         .replace(/परिवतित/g, 'परिवर्तित')
+         .replace(/पूति/g, 'पूर्ति')
+         .replace(/आदशी/g, 'आदर्श')
+         .replace(/अथी(?=[\s,।!?\)]|$)/g, 'अर्थ')
+         .replace(/स्वरी(?=[\s,।!?\)]|$)/g, 'स्वरों')
+         .replace(/युग्में(?=[\s,।!?\)]|$)/g, 'युग्मों')
+         .replace(/वाक्यांशी(?=[\s,।!?\)]|$)/g, 'वाक्यांशों')
+         .replace(/नियमें(?=[\s,।!?\)]|$)/g, 'नियमों')
+         .replace(/महापुरु\s*षी|महापुरुषी/g, 'महापुरुषों')
+         .replace(/जीवी(?=[\s,।!?\)]|$)/g, 'जीवों')
+         .replace(/राष्ट्र\s*पिता/g, 'राष्ट्रपिता')
+         .replace(/बहु\s*वचन/g, 'बहुवचन')
+         .replace(/मा\s*ध्यम/g, 'माध्यम')
+         .replace(/इंद्रि\s*यों/g, 'इंद्रियों')
+         .replace(/ारिका\s*प्रसाद/g, 'द्वारिका प्रसाद')
+         .replace(/\bारा\b/g, 'द्वारा')
+         .replace(/गोलपोस्\s*ट|गोलपो\s*स्ट/g, 'गोलपोस्ट')
+         .replace(/बच्च\s*न/g, 'बच्चन')
+         .replace(/\bदीघ\b/g, 'दीर्घ')
+         .replace(/\bलिग\b/g, 'लिंग')
+         .replace(/स्त्रीलिग/g, 'स्त्रीलिंग')
+         .replace(/\bहिदी\b/g, 'हिंदी')
+         .replace(/पढ़ए/g, 'पढ़िए')
+         .replace(/रिक्\s*त\s*ान|रिक्\s*त\s*स्थान/g, 'रिक्त स्थान')
+         .replace(/भिन्न\s*ाथीक/g, 'भिन्नार्थक')
+         .replace(/पुलि्\s*लंग|पुलि्लंग/g, 'पुल्लिंग')
+         .replace(/क्र\s*मशः/g, 'क्रमशः')
+         .replace(/क्र\s*म(?=[\s,।!?\)]|$)/g, 'क्रम')
          .replace(/दू\s*रभाष/g, 'दूरभाष')
          .replace(/दू\s*र(?=[\s,।!?\)]|$)/g, 'दूर')
          .replace(/रू\s*प/g, 'रूप')
@@ -696,39 +752,74 @@ function cleanOptionText(optRaw) {
   return s;
 }
 
-// High-Fidelity Devanagari Ligature & Matra Reconstructor for Type0/Type3 Embedded Fonts
-function reconstructDevanagariLigatures(rawStr) {
-  if (!rawStr) return '';
-  let s = rawStr;
-  
-  // Prefix \x00 before consonant => consonant + chhoti 'i' matra (\u093F)
-  s = s.replace(/\x00([क-ह](?:्[क-ह])?)/g, '$1\u093F');
-  
-  // Suffix \x00 transformations
-  s = s.replace(/क\x00/g, 'की')
-       .replace(/म\x00/g, 'में')
-       .replace(/य\x00/g, 'यों')
-       .replace(/थ\x00/g, 'थी')
-       .replace(/ह\x00/g, 'हैं')
-       .replace(/छ\x00/g, 'छी')
-       .replace(/न\x00/g, 'नी')
-       .replace(/ल\x00/g, 'ली')
-       .replace(/स\x00/g, 'सी')
-       .replace(/द\x00/g, 'दी')
-       .replace(/र\x00/g, 'री')
-       .replace(/ब\x00/g, 'बी')
-       .replace(/प\x00/g, 'पी')
-       .replace(/ग\x00/g, 'गी')
-       .replace(/ट\x00/g, 'टी')
-       .replace(/ड\x00/g, 'डी')
-       .replace(/व\x00/g, 'वी')
-       .replace(/भ\x00/g, 'भी')
-       .replace(/श\x00/g, 'शी')
-       .replace(/ष\x00/g, 'षी')
-       .replace(/ज\x00/g, 'जी')
-       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
-       
-  return s;
+// High-Fidelity Devanagari Stream Ligature & Matra Reconstructor for Type0/Type3 Embedded Fonts
+function reconstructDevanagariItems(items) {
+  if (!items || !items.length) return [];
+  const out = [];
+  let i = 0;
+  while (i < items.length) {
+    let it = { ...items[i] };
+    let s = it.str || '';
+
+    // Case 1: Standalone \x00
+    if (s === '\x00') {
+      // Check if preceded by 'र' in previous item (e.g. र + \x00 + गा -> रोंगाली)
+      if (out.length > 0 && out[out.length - 1].str.endsWith('र')) {
+        const prev = out[out.length - 1];
+        if (i + 1 < items.length && items[i + 1].str.startsWith('गा')) {
+          prev.str = prev.str.slice(0, -1) + 'रों';
+          i++;
+          continue;
+        }
+      }
+
+      // If next item starts with consonant -> prefix chhoti 'i' matra
+      if (i + 1 < items.length) {
+        const nextIt = { ...items[i + 1] };
+        let nextStr = nextIt.str || '';
+        const m = nextStr.match(/^([क-ह](?:्[क-ह])?)(.*)/);
+        if (m) {
+          nextIt.str = m[1] + '\u093F' + m[2];
+          items[i + 1] = nextIt;
+          i++;
+          continue;
+        }
+      }
+    }
+
+    // Case 2: Within-item \x00 prefix before consonant => consonant + chhoti 'i' matra (\u093F)
+    s = s.replace(/\x00([क-ह](?:्[क-ह])?)/g, '$1\u093F');
+
+    // Case 3: Suffix \x00 transformations
+    s = s.replace(/क\x00/g, 'की')
+         .replace(/म\x00/g, 'में')
+         .replace(/य\x00/g, 'यों')
+         .replace(/थ\x00/g, 'थी')
+         .replace(/ह\x00/g, 'हैं')
+         .replace(/छ\x00/g, 'छी')
+         .replace(/न\x00/g, 'नी')
+         .replace(/ल\x00/g, 'ली')
+         .replace(/स\x00/g, 'सी')
+         .replace(/द\x00/g, 'दी')
+         .replace(/र\x00/g, 'री')
+         .replace(/ब\x00/g, 'बी')
+         .replace(/प\x00/g, 'पी')
+         .replace(/ट\x00/g, 'टी')
+         .replace(/ड\x00/g, 'डी')
+         .replace(/व\x00/g, 'वी')
+         .replace(/भ\x00/g, 'भी')
+         .replace(/श\x00/g, 'शी')
+         .replace(/ष\x00/g, 'षी')
+         .replace(/ज\x00/g, 'जी')
+         .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+
+    it.str = s;
+    if (it.str.length > 0) {
+      out.push(it);
+    }
+    i++;
+  }
+  return out;
 }
 
 // Universal Client-Side PDF Parser using PDF.js with Tight 3.8px Baseline Line Clustering
@@ -763,13 +854,16 @@ btnParsePdf.addEventListener('click', async () => {
       let items = textContent.items.map(item => {
         const tx = item.transform;
         return {
-          str: reconstructDevanagariLigatures(item.str || ''),
+          str: item.str || '',
           x: tx[4],
           y: (viewport.height / 2.0) - (tx[5] / 2.0),
           width: item.width || 0,
           height: item.height || Math.abs(tx[3]) || 10
         };
       }).filter(it => it.str.length > 0);
+
+      // Reconstruct cross-token Devanagari ligatures and prefixes
+      items = reconstructDevanagariItems(items);
 
       // Filter right-edge marks column and standard headers/footers
       items = items.filter(it => {
@@ -820,9 +914,10 @@ btnParsePdf.addEventListener('click', async () => {
               if (!lineText.endsWith(' ')) lineText += ' ';
             } else {
               const isDev = /[\u0900-\u097F]/.test(tokenStr) || /[\u0900-\u097F]/.test(lineText);
+              const isDependentMatra = /^[\u093A-\u094F\u0901-\u0903\u0951-\u0954\u093C]/.test(tokenStr);
               const minGap = isDev ? 8.0 : 2.2;
               const gap = t.x - (lastX + lastW);
-              if (gap > minGap && !lineText.endsWith(' ') && !tokenStr.startsWith(' ') && !tokenStr.startsWith(')')) {
+              if (gap > minGap && !isDependentMatra && !lineText.endsWith(' ') && !tokenStr.startsWith(' ') && !tokenStr.startsWith(')')) {
                 lineText += ' ' + tokenStr;
               } else {
                 lineText += tokenStr;
