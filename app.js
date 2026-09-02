@@ -386,7 +386,10 @@ function formatMathText(str) {
        .replace(/m\s*2\b/gi, 'm²')
        .replace(/m\s*3\b/gi, 'm³')
        .replace(/nC\s*\/\s*m\s*2\b/gi, 'nC/m²')
-       .replace(/m\s+F\s*\/\s*m|m\s+F\b/gi, 'F/m');
+       .replace(/m\s+F\s*\/\s*m|m\s+F\b|\bmF\b/gi, 'F/m')
+       .replace(/\bcos\s*[−\-]\s*1\b|\bcos−1\b/gi, 'cos⁻¹')
+       .replace(/\bsin\s*[−\-]\s*1\b|\bsin−1\b/gi, 'sin⁻¹')
+       .replace(/\btan\s*[−\-]\s*1\b|\btan−1\b/gi, 'tan⁻¹');
 
   // Specific question ratio & formula cleaners (Run BEFORE individual variable replacements)
   s = s.replace(/B\s*B₁\s*2\s*is\s*:|B₂\s*is\s*:\s*B₁\b|B₂\s*:\s*B₁\b|B₂\s*,\s*B₁\s*is\s*:\b|For\s*x\s*:\s*R\s*=\s*3\s*:\s*4,\s*B₁\s*is\s*:/gi, "B₂/B₁ is:")
@@ -451,6 +454,140 @@ function formatMathText(str) {
        .replace(/\b4\s+th\b/gi, '4th')
        .replace(/\b6\s+th\b/gi, '6th')
        .replace(/\b8\s+th\b/gi, '8th');
+
+  // Hindi & Devanagari Ligature & Orthographic Normalization
+  if (/[\u0900-\u097F]/.test(s)) {
+    s = s.replace(/कि्\s*त|क\u093F्\s*त/g, 'क्ति')
+         .replace(/सि्\s*म|स\u093F्\s*म/g, 'स्मि')
+         .replace(/सि्\s*थ|स\u093F्\s*थ/g, 'स्थि')
+         .replace(/निम्\s*नलिखित/g, 'निम्नलिखित')
+         .replace(/व्यं\s*जन/g, 'व्यंजन')
+         .replace(/दू\s*रभाष/g, 'दूरभाष')
+         .replace(/दू\s*र(?=[\s,।!?\)]|$)/g, 'दूर')
+         .replace(/रू\s*प/g, 'रूप')
+         .replace(/अनुचित\s*प्र\s*योग|अनुचितप्रयोग/g, 'अनुचित प्रयोग')
+         .replace(/प्र\s+योग/g, 'प्रयोग')
+         .replace(/प्र\s*योग/g, 'प्रयोग')
+         .replace(/प्र\s*कृत/g, 'प्रकृत')
+         .replace(/प्र\s*कट/g, 'प्रकट')
+         .replace(/प्र\s*कार/g, 'प्रकार')
+         .replace(/प्र\s*श्न/g, 'प्रश्न')
+         .replace(/प्र\s*धान/g, 'प्रधान')
+         .replace(/प्र\s*भाव/g, 'प्रभाव')
+         .replace(/प्र\s*मुख/g, 'प्रमुख')
+         .replace(/प्र\s*शंसा/g, 'प्रशंसा')
+         .replace(/प्र\s*ति/g, 'प्रति')
+         .replace(/प्र\s*थम/g, 'प्रथम')
+         .replace(/प्र\s*सिद्धि/g, 'प्रसिद्धि')
+         .replace(/प्र\s*ाथीना|प्र\s*ाथना|प्राथीना/g, 'प्रार्थना')
+         .replace(/दू\s*ध/g, 'दूध')
+         .replace(/दू\s*सरे|दू\s*सरी/g, 'दूसरे')
+         .replace(/तत्\s*सम/g, 'तत्सम')
+         .replace(/तद्\s*भव/g, 'तद्भव')
+         .replace(/दुग्\s*ध/g, 'दुग्ध')
+         .replace(/व्य\s*क्ति/g, 'व्यक्ति')
+         .replace(/शिल्\s*पी/g, 'शिल्पी')
+         .replace(/पु\s*स्त/g, 'पुस्त')
+         .replace(/विद्य\s*ालय/g, 'विद्यालय')
+         .replace(/मुख्\s*य/g, 'मुख्य')
+         .replace(/दिल्\s*ली/g, 'दिल्ली')
+         .replace(/नृ\s*त्य/g, 'नृत्य')
+         .replace(/सत्रि\s*या/g, 'सत्रिया')
+         .replace(/पश्चिम\s*ी/g, 'पश्चिमी')
+         .replace(/शास्\s*त्रीय/g, 'शास्त्रीय')
+         .replace(/महिला\s*ओं/g, 'महिलाओं')
+         .replace(/परंपरा\s*ओं/g, 'परंपराओं')
+         .replace(/वाक्य\s*ों/g, 'वाक्यों')
+         .replace(/शब्द\s*ों/g, 'शब्दों')
+         .replace(/लोग\s*ों/g, 'लोगों')
+         .replace(/दोन\s*ों/g, 'दोनों')
+         .replace(/चार\s*ों/g, 'चारों')
+         .replace(/घर\s*ों/g, 'घरों')
+         .replace(/मंदिर\s*ों/g, 'मंदिरों')
+         .replace(/सत्\s*कर्म/g, 'सत्कर्म')
+         .replace(/अ\s*निश्च/g, 'अनिश्च')
+         .replace(/वि\s*शेषण/g, 'विशेषण')
+         .replace(/ट\s*[-–—]?\s*वगी|ट-वग/g, 'ट-वर्ग')
+         .replace(/क\s*[-–—]?\s*वगी|क-वग/g, 'क-वर्ग')
+         .replace(/च\s*[-–—]?\s*वगी|च-वग/g, 'च-वर्ग')
+         .replace(/त\s*[-–—]?\s*वगी|त-वग/g, 'त-वर्ग')
+         .replace(/प\s*[-–—]?\s*वगी|प-वग/g, 'प-वर्ग')
+         .replace(/वगी(?=[\s,।!?\)]|$)|वग(?=[\s,।!?\)]|$)/g, 'वर्ग')
+         .replace(/मार्गी(?=[\s,।!?\)]|$)/g, 'मार्ग')
+         .replace(/स्वर्गी(?=[\s,।!?\)]|$)/g, 'स्वर्ग')
+         .replace(/दुर्गी(?=[\s,।!?\)]|$)/g, 'दुर्ग')
+         .replace(/क्\s*यों/g, 'क्यों')
+         .replace(/क्\s*या/g, 'क्या')
+         .replace(/क्\s*य/g, 'क्य')
+         .replace(/ध्\s*या/g, 'ध्या')
+         .replace(/स्\s*व/g, 'स्व')
+         .replace(/त्\s*य/g, 'त्य')
+         .replace(/न्\s*ह/g, 'न्ह')
+         .replace(/न्\s*य/g, 'न्य')
+         .replace(/व्\s*य/g, 'व्य')
+         .replace(/ल्\s*प/g, 'ल्प')
+         .replace(/ब्\s*द/g, 'ब्द')
+         .replace(/ष्ट्\s*र/g, 'ष्ट्र')
+         .replace(/प्र\s*ा/g, 'प्रा')
+         .replace(/श्र\s*ी/g, 'श्री')
+         .replace(/त्र\s*ी/g, 'त्री')
+         .replace(/द्र\s*ी/g, 'द्री')
+         .replace(/छुटि\s*टयों|छुट्ट\s*य\s*क|छुट्टि\s*यों/g, 'छुट्टियों')
+         .replace(/सिह(?=[\s,।!?\)]|$)/g, 'सिंह')
+         .replace(/नहैं(?=[\s,।!?\)]|$)/g, 'नहीं')
+         .replace(/लोगी(?=[\s,।!?\)]|$)/g, 'लोगों')
+         .replace(/दोनी(?=[\s,।!?\)]|$)/g, 'दोनों')
+         .replace(/चारी ओर/g, 'चारों ओर')
+         .replace(/घरी(?=[\s,।!?\)]|$)/g, 'घरों')
+         .replace(/पवी(?=[\s,।!?\)]|$)/g, 'पर्व')
+         .replace(/वा\s+क्य/g, 'वाक्य')
+         .replace(/पयायवाची|पयाय/g, 'पर्यायवाची')
+         .replace(/संदभीगत/g, 'संदर्भगत')
+         .replace(/संदभी/g, 'संदर्भ')
+         .replace(/उपसगी/g, 'उपसर्ग')
+         .replace(/सवीनाम|सवनाम/g, 'सर्वनाम')
+         .replace(/सवीथा|सवथा/g, 'सर्वथा')
+         .replace(/भावपूण/g, 'भावपूर्ण')
+         .replace(/संपूण|सपूण/g, 'संपूर्ण')
+         .replace(/पूणतः|पूणत/g, 'पूर्णतः')
+         .replace(/पूण/g, 'पूर्ण')
+         .replace(/निमाण/g, 'निर्माण')
+         .replace(/विचारी(?=[\s,।!?\)]|$)/g, 'विचारों')
+         .replace(/अंगी(?=[\s,।!?\)]|$)/g, 'अंगों')
+         .replace(/वण(?=[\s,।!?\)]|$)/g, 'वर्ण')
+         .replace(/विेषण/g, 'विश्लेषण')
+         .replace(/गृहकायों(?=[\s,।!?\)]|$)/g, 'गृहकार्य')
+         .replace(/गीद(?=[\s,।!?\)]|$)/g, 'गेंद')
+         .replace(/नजवाचक/g, 'निजवाचक')
+         .replace(/क्र\s*ांतिकारी/g, 'क्रांतिकारी')
+         .replace(/उल्\s*लेख/g, 'उल्लेख')
+         .replace(/परस्प\s*र/g, 'परस्पर')
+         .replace(/उपयुक्\s*त/g, 'उपयुक्त')
+         .replace(/युग्\s*म/g, 'युग्म')
+         .replace(/संस्\s*मरण/g, 'संस्मरण')
+         .replace(/आत्\s*मकथात्\s*मक/g, 'आत्मकथात्मक')
+         .replace(/आत्\s*मकथा/g, 'आत्मकथा')
+         .replace(/विपक्ष\s*ी/g, 'विपक्षी')
+         .replace(/गोलपो\s*स्ट/g, 'गोलपोस्ट')
+         .replace(/पहुँ\s*चते|पहुँ\s*च/g, 'पहुँचते')
+         .replace(/दशन|दशीन/g, 'दर्शन')
+         .replace(/वषा(?=[\s,।!?\)]|$)/g, 'वर्षा')
+         .replace(/वणन/g, 'वर्णन')
+         .replace(/पवत|पवीत/g, 'पर्वत')
+         .replace(/अथ(?=[\s,।!?\)]|$)/g, 'अर्थ')
+         .replace(/कद्र य/g, 'केंद्रीय')
+         .replace(/शान्तिपूवक|शांतिपूवीक/g, 'शांतिपूर्वक')
+         .replace(/परसग|परसगी/g, 'परसर्ग')
+         .replace(/धम(?=[\s,।!?\)]|$)/g, 'धर्म')
+         .replace(/कम(?=[\s,।!?\)]|$)/g, 'कर्म')
+         .replace(/कमें(?=[\s,।!?\)]|$)/g, 'कर्मों')
+         .replace(/शब् दी|शब्दी/g, 'शब्दों')
+         .replace(/वाक् यों|वाक्यी/g, 'वाक्यों')
+         .replace(/मंदर|मंदिरी/g, 'मंदिरों')
+         .replace(/पुजारिय|पुजारियों/g, 'पुजारियों')
+         .replace(/राजदरबारी/g, 'राजदरबारों')
+         .replace(/मठ(?=[\s,।!?\)]|$)/g, 'मठों');
+  }
 
   // Precision Whitespace Normalizer & XML Control Character Sanitizer
   s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '')
@@ -559,6 +696,41 @@ function cleanOptionText(optRaw) {
   return s;
 }
 
+// High-Fidelity Devanagari Ligature & Matra Reconstructor for Type0/Type3 Embedded Fonts
+function reconstructDevanagariLigatures(rawStr) {
+  if (!rawStr) return '';
+  let s = rawStr;
+  
+  // Prefix \x00 before consonant => consonant + chhoti 'i' matra (\u093F)
+  s = s.replace(/\x00([क-ह](?:्[क-ह])?)/g, '$1\u093F');
+  
+  // Suffix \x00 transformations
+  s = s.replace(/क\x00/g, 'की')
+       .replace(/म\x00/g, 'में')
+       .replace(/य\x00/g, 'यों')
+       .replace(/थ\x00/g, 'थी')
+       .replace(/ह\x00/g, 'हैं')
+       .replace(/छ\x00/g, 'छी')
+       .replace(/न\x00/g, 'नी')
+       .replace(/ल\x00/g, 'ली')
+       .replace(/स\x00/g, 'सी')
+       .replace(/द\x00/g, 'दी')
+       .replace(/र\x00/g, 'री')
+       .replace(/ब\x00/g, 'बी')
+       .replace(/प\x00/g, 'पी')
+       .replace(/ग\x00/g, 'गी')
+       .replace(/ट\x00/g, 'टी')
+       .replace(/ड\x00/g, 'डी')
+       .replace(/व\x00/g, 'वी')
+       .replace(/भ\x00/g, 'भी')
+       .replace(/श\x00/g, 'शी')
+       .replace(/ष\x00/g, 'षी')
+       .replace(/ज\x00/g, 'जी')
+       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+       
+  return s;
+}
+
 // Universal Client-Side PDF Parser using PDF.js with Tight 3.8px Baseline Line Clustering
 btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
@@ -568,7 +740,12 @@ btnParsePdf.addEventListener('click', async () => {
   genStatusText.innerText = 'Extracting questions client-side...';
 
   try {
-    const loadingTask = pdfjsLib.getDocument({ data: state.pdfArrayBuffer });
+    const loadingTask = pdfjsLib.getDocument({
+      data: state.pdfArrayBuffer,
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/'
+    });
     const pdfDoc = await loadingTask.promise;
     const numPages = pdfDoc.numPages;
 
@@ -586,18 +763,20 @@ btnParsePdf.addEventListener('click', async () => {
       let items = textContent.items.map(item => {
         const tx = item.transform;
         return {
-          str: (item.str || '').trim(),
+          str: reconstructDevanagariLigatures(item.str || ''),
           x: tx[4],
           y: (viewport.height / 2.0) - (tx[5] / 2.0),
+          width: item.width || 0,
           height: item.height || Math.abs(tx[3]) || 10
         };
-      }).filter(it => Boolean(it.str));
+      }).filter(it => it.str.length > 0);
 
       // Filter right-edge marks column and standard headers/footers
       items = items.filter(it => {
-        if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(it.str)) return false;
-        if (it.y < 35 && (it.str.toLowerCase().includes('cbse') || it.str.toLowerCase().includes('quiz') || it.str.toLowerCase().includes('careers360'))) return false;
-        if (it.y > ((viewport.height / 2.0) - 45) && (it.str.toLowerCase().includes('page') || /^\d+$/.test(it.str))) return false;
+        const s = it.str.trim();
+        if (it.x > 565 && ['1', '2', '3', '4', '5', '0.5'].includes(s)) return false;
+        if (it.y < 35 && (s.toLowerCase().includes('cbse') || s.toLowerCase().includes('quiz') || s.toLowerCase().includes('careers360'))) return false;
+        if (it.y > ((viewport.height / 2.0) - 45) && (s.toLowerCase().includes('page') || /^\d+$/.test(s))) return false;
         return true;
       });
 
@@ -627,21 +806,34 @@ btnParsePdf.addEventListener('click', async () => {
         l.items.sort((a, b) => a.x - b.x);
 
         let lineText = "";
+        let lastX = null;
+        let lastW = null;
+
         for (const t of l.items) {
           let tokenStr = t.str;
-          if (!tokenStr) continue;
-          if (!lineText) {
+          if (!tokenStr && tokenStr !== ' ') continue;
+
+          if (lastX === null) {
             lineText = tokenStr;
-          } else if ([',', '.', ':', ';', '?', '!', '%', '°', '°C'].includes(tokenStr)) {
-            lineText += tokenStr;
-          } else if (lineText.endsWith('(') || tokenStr.startsWith(')')) {
-            lineText += tokenStr;
           } else {
-            lineText += " " + tokenStr;
+            if (tokenStr === ' ') {
+              if (!lineText.endsWith(' ')) lineText += ' ';
+            } else {
+              const isDev = /[\u0900-\u097F]/.test(tokenStr) || /[\u0900-\u097F]/.test(lineText);
+              const minGap = isDev ? 8.0 : 2.2;
+              const gap = t.x - (lastX + lastW);
+              if (gap > minGap && !lineText.endsWith(' ') && !tokenStr.startsWith(' ') && !tokenStr.startsWith(')')) {
+                lineText += ' ' + tokenStr;
+              } else {
+                lineText += tokenStr;
+              }
+            }
           }
+          lastX = t.x;
+          lastW = t.width;
         }
 
-        lineText = formatMathText(lineText);
+        lineText = formatMathText(lineText.replace(/\s+/g, ' ').trim());
         if (lineText) {
           if (/(?:chemistry|रसायन)/i.test(lineText)) currentSection = 'Chemistry';
           else if (/(?:physics|भौतिक)/i.test(lineText)) currentSection = 'Physics';
@@ -747,17 +939,14 @@ btnParsePdf.addEventListener('click', async () => {
 });
 
 function isHeaderOrFooter(text) {
-  const l = text.toLowerCase();
-  return l.includes('7th cbse') || l.includes('careers360') || (l.includes('page ') && l.length < 15) || l.includes('maximum marks') || l.includes('general instructions') || l.includes('subject:');
+  const l = (text || '').toLowerCase().trim();
+  return l.includes('cbse') || l.includes('careers360') || (l.includes('page ') && l.length < 30) || l.includes('maximum marks') || l.includes('general instructions') || l.includes('subject:') || l.includes('quiz hindi');
 }
 
-// Smart Paragraph Reflower: Merges broken PDF line wraps into natural flowing sentences
-function reflowStemParagraphs(stemText) {
-  if (!stemText) return '';
-  stemText = stemText.replace(/(motions as:)\s*(x₁\s*=\s*√\s*7[^\n]+?cm)\s*(where\s+x\s+is)/gi, '$1\n$2\n$3')
-                     .replace(/(given by:?)\s*(\(P\s*\+\s*a\/V²\)[^\n]*?(?:= RT[,\.]?))\s*(where\s+P)/gi, '$1\n$2\n$3');
-  const lines = stemText.split('\n').map(l => l.trim()).filter(Boolean);
-  if (lines.length <= 1) return stemText;
+// Paragraph Reflow Engine: reconstructs connected sentences without breaking numbered statements / lists
+function reflowStemParagraphs(stem) {
+  const lines = stem.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length <= 1) return stem;
 
   let result = [];
   let currentPara = lines[0];
@@ -781,8 +970,8 @@ function reflowStemParagraphs(stemText) {
 
 // Universal Question Parser: Handles Standard Exams, Hindi & Devanagari, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
-  // Matches Q. 1, Question 1, प्रश्न 1., प्र. 1., प्र० 1., प्रश्न संख्या 1, प्रश्न १., 1.
-  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|खंड\s*[-–—]?\s*[अ-हA-Za-z0-9]+:?|भाग\s*[-–—]?\s*[अ-हA-Za-z0-9]+:?)\s*\n+)?\s*(?:(?:Q\.?|Question|Que\.?|प्रश्न|प्र(?:श्न)?[\.०\s]*(?:संख्या|सं[\.०])?)\s*[:\.\-]?\s*([0-9०-९]+)|([0-9०-९]+)[\.\:\-]\s+(?=[\u0900-\u097F]))\s*[:\.\-–—]?\s*/gi;
+  // Matches Q. 1, Question 1, प्रश्न 1., प्र. 1., प्र० 1., प्रश्न संख्या 1, प्रश्न १., and standalone 1. in Hindi/Devanagari
+  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Za-z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|General\s+Studies|Hindi|English|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग|(?:खंड|भाग)\s*[-–—:]\s*[क-घअ-दA-Da-d1-4०-९]+)\s*\n+)?\s*(?:(?:Q\.?|Question|Que\.?|question|que\.?|प्रश्न|प्र(?:श्न)?[\.०\s]*(?:संख्या|सं[\.०])?)\s*[:\.\-]?\s*([0-9०-९]+)|([0-9०-९]+)[\.\:\-]\s+(?=[\u0900-\u097F]|['"‘“]\s*[\u0900-\u097F]))\s*[:\.\-–—]?\s*/g;
 
   let matches = [];
   let m;
@@ -791,7 +980,7 @@ function parseUniversalQuestions(fullStream) {
   }
 
   let questions = [];
-  let currentSection = 'Physics';
+  let currentSection = 'Hindi';
 
   for (let i = 0; i < matches.length; i++) {
     const match = matches[i];
@@ -800,7 +989,7 @@ function parseUniversalQuestions(fullStream) {
     const qNum = parseInt(qNumStr, 10);
 
     const preChunk = fullStream.slice(Math.max(0, match.index - 120), match.index);
-    const secMatch = (match[0] + " " + preChunk).match(/(?:^|[\s\n\r])(Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग|खंड\s*[-–—]?\s*[अ-हA-Za-z0-9]+|भाग\s*[-–—]?\s*[अ-हA-Za-z0-9]+|Section\s+[A-Z0-9]+:?[^\n]*)/i);
+    const secMatch = (match[0] + " " + preChunk).match(/(?:^|[\s\n\r])(Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|General\s+Studies|Hindi|English|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग|(?:खंड|भाग)\s*[-–—:]\s*[क-घअ-दA-Da-d1-4०-९]+|Section\s+[A-Za-z0-9]+:?[^\n]*)/i);
     if (secMatch) {
       currentSection = secMatch[1].trim();
     }
@@ -809,7 +998,7 @@ function parseUniversalQuestions(fullStream) {
     const endIdx = (i + 1 < matches.length) ? matches[i + 1].index : fullStream.length;
     let rawChunk = fullStream.slice(startIdx, endIdx).trim();
 
-    if (rawChunk.length < 10) continue;
+    if (rawChunk.length < 5) continue;
 
     // Isolate Question & Options from "Correct Answer:", "Solution:", "उत्तर:", "हल:"
     const solMatch = rawChunk.match(/\n\s*(?:Correct\s+Answer:|Solution:|Ans(?:wer)?:|उत्तर\s*[:\-]|सही\s+उत्तर\s*[:\-]|हल\s*[:\-]|व्याख्या\s*[:\-]|स्पष्टीकरण\s*[:\-])/i);
@@ -820,8 +1009,8 @@ function parseUniversalQuestions(fullStream) {
       solChunk = rawChunk.slice(solMatch.index).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '').trim();
     }
 
-    // Parse Options: Supports (A)-(D), (1)-(4), (क)-(घ), (अ)-(द), (१)-(४), Option 1-4, विकल्प 1-4, विकल्प (क)-(घ)
-    const optPat = /(?:^|\n)\s*(?:(?:Option|विकल्प)\s*(?:\(\s*([1-4A-Da-dअ-ह०-९])\s*\)|([1-4A-Da-dअ-ह०-९]))\s*:|\(\s*([A-Da-d1-4अ-ह०-९iIvVxX]+)\s*\)|([A-Da-dअ-ह०-९])[\.\)])\s*/gi;
+    // Precise option marker pattern: matches (A), (B), (C), (D), (1), (2), (3), (4), (क), (ख), (ग), (घ), (अ), (ब), (स), (द), (१), (२), (३), (४)
+    const optPat = /(?:^|[\s\n\r])(?:(?:Option|विकल्प)\s*(?:\(\s*([1-4A-Da-dक-घअ-द१-४])\s*\)|([1-4A-Da-dक-घअ-द१-४]))\s*:|\(\s*([A-Da-d1-4क-घअ-द१-४]|i{1,3}|iv|v|vi{0,3}|ix|x)\s*\)|([A-Da-d1-4])[\.\)])\s*/gi;
     let optMatches = [];
     let om;
     while ((om = optPat.exec(qaChunk)) !== null) {
@@ -830,6 +1019,7 @@ function parseUniversalQuestions(fullStream) {
 
     let stem = qaChunk;
     let optA = '', optB = '', optC = '', optD = '';
+    let optLabels = { A: '(A)', B: '(B)', C: '(C)', D: '(D)' };
 
     if (optMatches.length >= 4) {
       const mA = optMatches[optMatches.length - 4];
@@ -837,22 +1027,41 @@ function parseUniversalQuestions(fullStream) {
       const mC = optMatches[optMatches.length - 2];
       const mD = optMatches[optMatches.length - 1];
 
+      const rawA = (mA[1] || mA[2] || mA[3] || mA[4] || 'A').trim();
+      const rawB = (mB[1] || mB[2] || mB[3] || mB[4] || 'B').trim();
+      const rawC = (mC[1] || mC[2] || mC[3] || mC[4] || 'C').trim();
+      const rawD = (mD[1] || mD[2] || mD[3] || mD[4] || 'D').trim();
+
+      optLabels = {
+        A: `(${rawA})`,
+        B: `(${rawB})`,
+        C: `(${rawC})`,
+        D: `(${rawD})`
+      };
+
       stem = qaChunk.slice(0, mA.index).trim();
-      optA = cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index));
-      optB = cleanOptionText(qaChunk.slice(mB.index + mB[0].length, mC.index));
-      optC = cleanOptionText(qaChunk.slice(mC.index + mC[0].length, mD.index));
-      optD = cleanOptionText(qaChunk.slice(mD.index + mD[0].length));
+      optA = formatMathText(cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index)));
+      optB = formatMathText(cleanOptionText(qaChunk.slice(mB.index + mB[0].length, mC.index)));
+      optC = formatMathText(cleanOptionText(qaChunk.slice(mC.index + mC[0].length, mD.index)));
+      optD = formatMathText(cleanOptionText(qaChunk.slice(mD.index + mD[0].length)));
     } else if (optMatches.length === 3) {
       const mA = optMatches[0], mB = optMatches[1], mC = optMatches[2];
+      const rawA = (mA[1] || mA[2] || mA[3] || mA[4] || 'A').trim();
+      const rawB = (mB[1] || mB[2] || mB[3] || mB[4] || 'B').trim();
+      const rawC = (mC[1] || mC[2] || mC[3] || mC[4] || 'C').trim();
+      optLabels = { A: `(${rawA})`, B: `(${rawB})`, C: `(${rawC})`, D: '(D)' };
       stem = qaChunk.slice(0, mA.index).trim();
-      optA = cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index));
-      optB = cleanOptionText(qaChunk.slice(mB.index + mB[0].length, mC.index));
-      optC = cleanOptionText(qaChunk.slice(mC.index + mC[0].length));
+      optA = formatMathText(cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index)));
+      optB = formatMathText(cleanOptionText(qaChunk.slice(mB.index + mB[0].length, mC.index)));
+      optC = formatMathText(cleanOptionText(qaChunk.slice(mC.index + mC[0].length)));
     } else if (optMatches.length === 2) {
       const mA = optMatches[0], mB = optMatches[1];
+      const rawA = (mA[1] || mA[2] || mA[3] || mA[4] || 'A').trim();
+      const rawB = (mB[1] || mB[2] || mB[3] || mB[4] || 'B').trim();
+      optLabels = { A: `(${rawA})`, B: `(${rawB})`, C: '(C)', D: '(D)' };
       stem = qaChunk.slice(0, mA.index).trim();
-      optA = cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index));
-      optB = cleanOptionText(qaChunk.slice(mB.index + mB[0].length));
+      optA = formatMathText(cleanOptionText(qaChunk.slice(mA.index + mA[0].length, mB.index)));
+      optB = formatMathText(cleanOptionText(qaChunk.slice(mB.index + mB[0].length)));
     }
 
     // Clean Real Gas Equation 2 formatting if floating tokens occurred
@@ -861,17 +1070,18 @@ function parseUniversalQuestions(fullStream) {
       .replace(/\(P\s*\+\s*a\/V2\s*\)/g, '(P + a/V²)')
       .replace(/\(P\s*\+\s*a\/V²\s*\)/g, '(P + a/V²)')
       .replace(/\(P\s*\+\s*V\s*a\s*2\s*\)/g, '(P + a/V²)')
-      .replace(/\(V\s*[−\-]\s*b\s*\)/g, '(V − b)')
-      .replace(/ab[−\-]2\b/g, 'ab⁻²');
+      .replace(/ab[−\-]2\b/g, 'ab⁻²')
+      .replace(/(?:^|\n)\s*Option\s+[1-4]:\s*/gi, '\n');
 
     let stemLines = stem.split('\n').map(l => formatMathText(l)).filter(l => l && !isHeaderOrFooter(l));
-    const reflowedStem = reflowStemParagraphs(stemLines.join('\n'));
+    const reflowedStem = formatMathText(reflowStemParagraphs(stemLines.join('\n')));
 
     questions.push({
       q_num: qNum,
       section: currentSection,
       question: reflowedStem,
       options: { A: optA, B: optB, C: optC, D: optD },
+      optLabels: optLabels,
       solution: solChunk
     });
   }
@@ -905,10 +1115,10 @@ function renderQuestionsList(questions) {
       <div class="q-stem" contenteditable="true" data-field="question">${escapeHtml(q.question)}</div>
       ${q.imageData ? `<div class="q-diagram-preview"><img src="${q.imageData}" alt="Question ${q.q_num} Diagram" style="max-width: 340px; border-radius: 6px; margin: 8px 0; border: 1px solid rgba(255,255,255,0.2);"></div>` : ''}
       <div class="q-options">
-        ${q.options.A ? `<div class="q-opt"><span>(A)</span> ${escapeHtml(q.options.A)}</div>` : ''}
-        ${q.options.B ? `<div class="q-opt"><span>(B)</span> ${escapeHtml(q.options.B)}</div>` : ''}
-        ${q.options.C ? `<div class="q-opt"><span>(C)</span> ${escapeHtml(q.options.C)}</div>` : ''}
-        ${q.options.D ? `<div class="q-opt"><span>(D)</span> ${escapeHtml(q.options.D)}</div>` : ''}
+        ${q.options.A ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.A) || '(A)'}</span> ${escapeHtml(q.options.A)}</div>` : ''}
+        ${q.options.B ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.B) || '(B)'}</span> ${escapeHtml(q.options.B)}</div>` : ''}
+        ${q.options.C ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.C) || '(C)'}</span> ${escapeHtml(q.options.C)}</div>` : ''}
+        ${q.options.D ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.D) || '(D)'}</span> ${escapeHtml(q.options.D)}</div>` : ''}
       </div>
       ${q.solution ? `
         <details class="q-sol-accordion">
@@ -1003,7 +1213,8 @@ function setupGenerator() {
         );
 
         const isHindi = isDevanagari(q.question) || isDevanagari(q.section) || ['A', 'B', 'C', 'D'].some(k => isDevanagari(q.options[k]));
-        const slideFontFace = isHindi ? 'Noto Sans Devanagari' : 'Plus Jakarta Sans';
+        const slideFontFace = isHindi ? 'Nirmala UI' : 'Segoe UI';
+        const getOptLbl = (k) => (q.optLabels && q.optLabels[k]) ? `${q.optLabels[k]} ` : `(${k}) `;
 
         // 1. Question with Genuine Diagram (e.g. Q4 lens, Q5 plates, Q13 lamina, Q17 surface, Q19 bob)
         if (q.imageData) {
@@ -1049,7 +1260,7 @@ function setupGenerator() {
                   slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curDiagOptY, w: imgOpt.widthInches, h: imgOpt.heightInches });
                 } else {
                   slide.addText([
-                    { text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                    { text: getOptLbl(k), options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
                     { text: q.options[k], options: { fontSize: botOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
                   ], { x: bLeft, y: curDiagOptY, w: bWidth, h: diagOptSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                 }
@@ -1064,7 +1275,7 @@ function setupGenerator() {
 
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
-                textRunsBot.push({ text: `(${k}) `, options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
+                textRunsBot.push({ text: getOptLbl(k), options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
                 textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
               }
             }
@@ -1117,7 +1328,7 @@ function setupGenerator() {
                 slide.addImage({ data: imgA.dataUrl, x: col1X, y: row1Y, w: imgA.widthInches, h: imgA.heightInches });
               } else {
                 slide.addText([
-                  { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: getOptLbl('A'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
                   { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
                 ], { x: col1X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
@@ -1130,7 +1341,7 @@ function setupGenerator() {
                 slide.addImage({ data: imgC.dataUrl, x: col1X, y: row2Y, w: imgC.widthInches, h: imgC.heightInches });
               } else {
                 slide.addText([
-                  { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: getOptLbl('C'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
                   { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
                 ], { x: col1X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
@@ -1143,7 +1354,7 @@ function setupGenerator() {
                 slide.addImage({ data: imgB.dataUrl, x: col2X, y: row1Y, w: imgB.widthInches, h: imgB.heightInches });
               } else {
                 slide.addText([
-                  { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: getOptLbl('B'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
                   { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
                 ], { x: col2X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
@@ -1156,7 +1367,7 @@ function setupGenerator() {
                 slide.addImage({ data: imgD.dataUrl, x: col2X, y: row2Y, w: imgD.widthInches, h: imgD.heightInches });
               } else {
                 slide.addText([
-                  { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                  { text: getOptLbl('D'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
                   { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
                 ], { x: col2X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
@@ -1164,19 +1375,19 @@ function setupGenerator() {
           } else {
             // Col 1 (A & C)
             slide.addText([
-              { text: '(A) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: getOptLbl('A'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
               { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } },
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
-              { text: '(C) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: getOptLbl('C'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
               { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
             ], { x: col1X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top', fontFace: slideFontFace });
 
             // Col 2 (B & D)
             slide.addText([
-              { text: '(B) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: getOptLbl('B'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
               { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } },
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
-              { text: '(D) ', options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+              { text: getOptLbl('D'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
               { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
             ], { x: col2X, y: row1Y, w: colW, h: 1.8, wrap: true, valign: 'top', fontFace: slideFontFace });
           }
@@ -1260,7 +1471,7 @@ function setupGenerator() {
                   slide.addImage({ data: imgOpt.dataUrl, x: bLeft, y: curContentY, w: imgOpt.widthInches, h: imgOpt.heightInches });
                 } else {
                   slide.addText([
-                    { text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
+                    { text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
                     { text: q.options[k], options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace } }
                   ], { x: bLeft, y: curContentY, w: bWidth, h: optSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                 }
@@ -1285,7 +1496,7 @@ function setupGenerator() {
 
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
-                textRuns.push({ text: `(${k}) `, options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
+                textRuns.push({ text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
                 textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
               }
             }

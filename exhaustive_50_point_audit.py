@@ -228,7 +228,7 @@ def run_50_point_audit(pptx_path):
         # 42. MCQ Four Options Present (Text + Vector Math Shapes)
         is_mcq = not (len(prs.slides) == 30 and 21 <= idx <= 25) and idx != 29
         if is_mcq:
-            opts = re.findall(r'\(([A-D])\)\s*([^\n\r]+)', slide_text)
+            opts = re.findall(r'\(([A-Dक-घ1-4])\)\s*([^\n\r]+)', slide_text)
             text_opt_count = len(opts)
             # Check vector math shapes (excluding slide diagram if any)
             is_diag_slide = len(prs.slides) == 30 and (idx in [4, 5, 13, 19])
@@ -239,13 +239,13 @@ def run_50_point_audit(pptx_path):
 
         # 43. MCQ Non-Empty Options
         if is_mcq:
-            opts = re.findall(r'\(([A-D])\)\s*([^\n\r]+)', slide_text)
+            opts = re.findall(r'\(([A-Dक-घ1-4])\)\s*([^\n\r]+)', slide_text)
             for o_k, o_v in opts:
                 if len(o_v.strip()) == 0:
                     failures.append((43, "Empty Option Body", f"Option ({o_k}) is blank"))
 
-        # 44. Numerical Section Integer Purity (Q21-Q25 must not have MCQ options)
-        if 21 <= idx <= 25:
+        # 44. Numerical Section Integer Purity (Q21-Q25 must not have MCQ options in 30-slide JEE papers)
+        if len(prs.slides) == 30 and 21 <= idx <= 25:
             opts = re.findall(r'\(([A-D])\)', slide_text)
             if len(opts) > 0:
                 failures.append((44, "Erroneous MCQ Options in Numerical Question", opts))
