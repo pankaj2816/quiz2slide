@@ -2286,6 +2286,8 @@ async function addBadgeLayoutSlide(slide, q, o) {
     const z = box(A.optionRatios[k]);
     optPt = Math.min(optPt, fitFontPt(q.options[k], z.w, z.h, Math.round(28 * o.fontScaleFactor), 10, charW));
   }
+  // keep a sensible hierarchy: options never dwarf a long question (but stay at least 18pt when they fit)
+  optPt = Math.min(optPt, Math.max(qPt + 2, Math.round(18 * o.fontScaleFactor)));
   for (const k of keys) {
     const z = box(A.optionRatios[k]);
     if (isMathExpression(q.options[k])) {
