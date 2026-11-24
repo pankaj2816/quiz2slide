@@ -400,18 +400,37 @@ function setupFontScalingControls() {
   });
 }
 
+// Progress / status panel under Step 1 (upload + parse) and Step 3 (generate)
+function setProgress(kind, pct, text, target = 'parse') {
+  const box = document.getElementById(target === 'gen' ? 'genProgress' : 'parseProgress');
+  if (!box) return;
+  box.classList.remove('hidden', 'is-work', 'is-done', 'is-error', 'is-upload');
+  box.classList.add(kind === 'error' ? 'is-error' : kind === 'done' ? 'is-done' : kind === 'upload' ? 'is-upload' : 'is-work');
+  box.querySelector('.progress-fill').style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
+  box.querySelector('.progress-text').innerText = text;
+}
+
 // Setup File Uploads
 function setupFileUploads() {
   pdfFileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
       const file = e.target.files[0];
       state.pdfFileName = file.name;
+      state.pdfArrayBuffer = null;
+      btnParsePdf.disabled = true;
+      const sizeTxt = file.size > 1048576 ? `${(file.size / 1048576).toFixed(1)} MB` : `${(file.size / 1024).toFixed(0)} KB`;
+      setProgress('upload', 0, `Loading ${file.name} (${sizeTxt})...`);
       const reader = new FileReader();
+      reader.onprogress = (evt) => {
+        if (evt.lengthComputable) setProgress('upload', evt.loaded / evt.total * 100, `Loading ${file.name}... ${Math.round(evt.loaded / evt.total * 100)}%`);
+      };
+      reader.onerror = () => setProgress('error', 100, `Could not read ${file.name}. Please try again.`);
       reader.onload = function(evt) {
-        state.pdfArrayBuffer = evt.target.result;
+        state.pdfArrayBuffer = evt.target.result; // kept intact: every parse works on a copy
         pdfDropzone.classList.add('has-file');
-        pdfFileLabel.innerText = `Selected: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+        pdfFileLabel.innerText = `✅ Uploaded: ${file.name} (${sizeTxt})`;
         btnParsePdf.disabled = false;
+        setProgress('done', 100, `✅ PDF uploaded (${sizeTxt}). Now click "Parse PDF Questions".`);
       };
       reader.readAsArrayBuffer(file);
     }
@@ -1156,12 +1175,17 @@ btnParsePdf.addEventListener('click', async () => {
   if (!state.pdfArrayBuffer) return;
 
   btnParsePdf.disabled = true;
+  btnGeneratePpt.disabled = true;
   btnParsePdf.innerHTML = '<span>⏳</span> Parsing PDF in browser...';
   genStatusText.innerText = 'Extracting questions client-side...';
+  setProgress('work', 2, 'Opening PDF...');
+  let textlessPages = 0;
 
   try {
     const loadingTask = pdfjsLib.getDocument({
-      data: state.pdfArrayBuffer,
+      // PDF.js takes ownership of the buffer it is given, so always pass a fresh copy
+      // (otherwise "Re-parse" fails with "Cannot perform Construct on a detached ArrayBuffer")
+      data: new Uint8Array(state.pdfArrayBuffer.slice(0)),
       cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
       cMapPacked: true,
       standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/'
@@ -1176,8 +1200,10 @@ btnParsePdf.addEventListener('click', async () => {
 
     for (let pno = 1; pno <= numPages; pno++) {
       genStatusText.innerText = `Parsing page ${pno} of ${numPages}...`;
+      setProgress('work', 2 + (pno - 1) / numPages * 95, `Reading page ${pno} of ${numPages}...`);
       const page = await pdfDoc.getPage(pno);
       const textContent = await page.getTextContent();
+      if (textContent.items.reduce((a, it) => a + (it.str || '').trim().length, 0) < 15) textlessPages++;
       const viewport = page.getViewport({ scale: 2.0 });
 
       let items = textContent.items.map(item => {
@@ -1350,11 +1376,26 @@ btnParsePdf.addEventListener('click', async () => {
     }
 
     renderQuestionsList(state.parsedQuestions);
-    btnGeneratePpt.disabled = false;
-    genStatusText.innerText = `Successfully extracted ${state.parsedQuestions.length} questions!`;
+    const nQ = state.parsedQuestions.length;
+    btnGeneratePpt.disabled = nQ === 0;
+    if (nQ > 0) {
+      genStatusText.innerText = `Successfully extracted ${nQ} questions!`;
+      setProgress('done', 100, `✅ Found ${nQ} questions in ${numPages} pages. Review them below, then click "Generate PowerPoint".`);
+      document.getElementById('sectionReview').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (textlessPages >= Math.max(1, numPages * 0.6)) {
+      genStatusText.innerText = 'No text found — this PDF is made of images (scanned / screenshots).';
+      setProgress('error', 100, `⚠️ This PDF has no typed text (${textlessPages} of ${numPages} pages are only pictures — scans or screenshots). ` +
+        `The tool needs a PDF with real text. Please upload a typed version of the questions (e.g. exported from Word / Google Docs).`);
+      questionsList.innerHTML = '<div class="empty-state"><p>⚠️ This PDF contains only images (scanned pages or screenshots), so there is no text to read.<br>Upload a typed PDF of the questions instead.</p></div>';
+    } else {
+      genStatusText.innerText = 'No questions found in this PDF.';
+      setProgress('error', 100, '⚠️ Text was found but no numbered questions with options (A)–(D). Questions should start with "1." / "Q1." / "प्रश्न 1" and options with (A) (B) (C) (D).');
+    }
 
   } catch (err) {
-    alert('Error reading PDF: ' + err.message);
+    console.error(err);
+    genStatusText.innerText = 'Could not read this PDF.';
+    setProgress('error', 100, '❌ Could not read this PDF: ' + err.message + '. Try re-uploading the file.');
   } finally {
     btnParsePdf.disabled = false;
     btnParsePdf.innerHTML = '<span>🔍</span> Re-parse PDF Questions';
@@ -1727,6 +1768,7 @@ function setupGenerator() {
         // Yield event loop every 4 slides
         if (idx % 4 === 0) {
           genStatusText.innerText = `Formatting slide ${idx + 1} of ${totalQs}...`;
+          setProgress('work', idx / totalQs * 85, `Building slide ${idx + 1} of ${totalQs}...`, 'gen');
           await new Promise(resolve => setTimeout(resolve, 0));
         }
 
@@ -2156,13 +2198,16 @@ function setupGenerator() {
       }
 
       genStatusText.innerText = 'Packaging presentation file...';
+      setProgress('work', 88, 'Packaging the PowerPoint file...', 'gen');
       const outName = `Quiz_Presentation_${state.parsedQuestions.length}_Slides.pptx`;
       let pptBlob = await pptx.write({ outputType: 'blob' });
       if (tpl) {
         genStatusText.innerText = 'Applying your PowerPoint template design to every slide...';
+        setProgress('work', 93, 'Applying your template design to every slide...', 'gen');
         pptBlob = await Q2STemplate.mergeIntoTemplate(tpl, pptBlob, slideKinds);
       }
       state.lastGeneratedBlob = pptBlob;
+      setProgress('done', 100, `✅ PowerPoint ready: ${totalQs} questions, ${(pptBlob.size / 1048576).toFixed(1)} MB. Saving / downloading...`, 'gen');
 
       // Ask User for Directory to Save using Native Browser "Save As" Dialog
       if ('showSaveFilePicker' in window) {
@@ -2197,7 +2242,9 @@ function setupGenerator() {
       }
 
     } catch (err) {
-      alert('Error generating PowerPoint: ' + err.message);
+      console.error(err);
+      genStatusText.innerText = 'Generation failed.';
+      setProgress('error', 100, '❌ Could not generate the PowerPoint: ' + err.message, 'gen');
     } finally {
       btnGeneratePpt.disabled = false;
       btnGeneratePpt.innerHTML = '<span>🚀</span> Generate PowerPoint (.pptx)';

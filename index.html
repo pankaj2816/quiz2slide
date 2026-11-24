@@ -6,7 +6,7 @@
   <title>Quiz2Slide Studio - Free Online PDF to PPTX Quiz Generator</title>
   <meta name="description" content="Convert any quiz or exam PDF (English or Hindi) into a PowerPoint deck - one question per slide, using your own PPTX template. Runs 100% in your browser.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=15.0">
+  <link rel="stylesheet" href="style.css?v=15.5">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <span class="revision-badge" id="revBadge">🏷️ Rev 15.4 (Real PPTX Templates + Custom Colors)</span>
+        <span class="revision-badge" id="revBadge">🏷️ Rev 15.5 (Real PPTX Templates + Custom Colors)</span>
         <span class="status-badge" id="appStatus">● 100% Private (Runs in Browser)</span>
       </div>
     </div>
@@ -92,6 +92,11 @@
         </div>
       </div>
 
+      <div class="progress-panel hidden" id="parseProgress" role="status" aria-live="polite">
+        <div class="progress-track"><div class="progress-fill"></div></div>
+        <div class="progress-text"></div>
+      </div>
+
       <div class="mt-4 flex-end">
         <button class="btn btn-primary" id="btnParsePdf" disabled>
           <span>🔍</span> Parse PDF Questions
@@ -122,7 +127,9 @@
       </div>
 
       <div class="canvas-workspace">
-        <div class="canvas-container" id="canvasWrapper">
+        <div class="canvas-left">
+          <p class="canvas-hint">🖱️ Drag a box to move it, drag its corners to resize. Text is placed inside these boxes on every slide.</p>
+          <div class="canvas-container" id="canvasWrapper">
           <canvas id="slideCanvas"></canvas>
           
           <!-- Unified Selection Box -->
@@ -151,32 +158,10 @@
             <div class="resize-handle handle-bl"></div>
             <div class="resize-handle handle-br"></div>
           </div>
-        </div>
+          </div> <!-- /canvas-container -->
 
-        <div class="canvas-controls">
-          <!-- Active Editing Target in Dual Mode -->
-          <div id="dualTargetSelector" class="dual-target-selector mb-3" style="display: none;">
-            <span class="selector-title">Active Canvas Focus:</span>
-            <div class="dual-target-btns">
-              <button type="button" class="btn-target-focus active" id="btnFocusQ" data-focus="question">
-                🟦 Question Area
-              </button>
-              <button type="button" class="btn-target-focus" id="btnFocusOpt" data-focus="options">
-                🟩 Option Area
-              </button>
-            </div>
-          </div>
-
-          <!-- PPTX template status (Rev 15.0) -->
-          <div class="template-info hidden" id="tplInfo">
-            <div class="tpl-info-title" id="tplInfoTitle">📐 PowerPoint template loaded</div>
-            <div class="tpl-info-body" id="tplInfoBody"></div>
-            <label class="toggle-label mt-2" id="lblUseBadges">
-              <input type="checkbox" id="chkUseBadges" checked>
-              <span>Place options beside the template's A/B/C/D badges (no extra labels)</span>
-            </label>
-          </div>
-
+          <div class="canvas-under">
+            <div class="under-card">
           <h3>Target Area Presets</h3>
           <div class="preset-grid" id="presetGridUnified">
             <button class="preset-btn active" data-preset="chalkboard-left">
@@ -274,7 +259,9 @@
             </div>
           </div>
 
-          <h3 class="mt-4">🔠 Smart Global Word &amp; Font Size</h3>
+            </div>
+            <div class="under-card">
+          <h3>🔠 Smart Global Word &amp; Font Size</h3>
           <div class="font-scale-box">
             <div class="font-presets-row">
               <button type="button" class="btn-font-preset" data-scale="85">Compact (18pt)</button>
@@ -330,7 +317,35 @@
             </label>
           </div>
 
-          <h3 class="mt-3">🎨 Text Colors</h3>
+            </div>
+          </div>
+        </div>
+
+        <div class="canvas-controls">
+          <!-- Active Editing Target in Dual Mode -->
+          <div id="dualTargetSelector" class="dual-target-selector mb-3" style="display: none;">
+            <span class="selector-title">Active Canvas Focus:</span>
+            <div class="dual-target-btns">
+              <button type="button" class="btn-target-focus active" id="btnFocusQ" data-focus="question">
+                🟦 Question Area
+              </button>
+              <button type="button" class="btn-target-focus" id="btnFocusOpt" data-focus="options">
+                🟩 Option Area
+              </button>
+            </div>
+          </div>
+
+          <!-- PPTX template status (Rev 15.0) -->
+          <div class="template-info hidden" id="tplInfo">
+            <div class="tpl-info-title" id="tplInfoTitle">📐 PowerPoint template loaded</div>
+            <div class="tpl-info-body" id="tplInfoBody"></div>
+            <label class="toggle-label mt-2" id="lblUseBadges">
+              <input type="checkbox" id="chkUseBadges" checked>
+              <span>Place options beside the template's A/B/C/D badges (no extra labels)</span>
+            </label>
+          </div>
+
+          <h3>🎨 Text Colors</h3>
           <p class="hint-text">Pick any color for the question and a different color for the options. Your choice is remembered on this device.</p>
           <div class="color-theme-row" id="colorThemeRow">
             <button type="button" class="btn-color-theme" data-theme="chalkboard" title="Light text for dark/green boards"><span class="sw" style="background:#1E4D2B"></span>Chalkboard</button>
@@ -413,6 +428,11 @@
         <button class="btn btn-success btn-lg" id="btnGeneratePpt" disabled>
           <span>🚀</span> Generate PowerPoint (.pptx)
         </button>
+      </div>
+
+      <div class="progress-panel hidden" id="genProgress" role="status" aria-live="polite">
+        <div class="progress-track"><div class="progress-fill"></div></div>
+        <div class="progress-text"></div>
       </div>
 
       <!-- Download Result Banner -->
@@ -592,7 +612,7 @@
     <p class="credit-line">Designed &amp; Developed by <a href="https://pixeltocloud.com?utm_source=quiz2slide&amp;utm_medium=footer_credit&amp;utm_campaign=client_referral" target="_blank" rel="noopener">PixelToCloud</a></p>
   </footer>
 
-  <script src="template_engine.js?v=15.2"></script>
-  <script src="app.js?v=15.4"></script>
+  <script src="template_engine.js?v=15.5"></script>
+  <script src="app.js?v=15.5"></script>
 </body>
 </html>
