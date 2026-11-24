@@ -1376,7 +1376,7 @@ function reflowStemParagraphs(stem) {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    const isSpecialItem = /^(?:\([A-Da-d1-4क-घअ-द१-४I-Vixv]+\)|[1-4१-४]\.|\•|Statement\s+[I|V|X\d]+|कथन\s*[1-4१-४I-V]|Assertion|Reason|अभिकथन|कारण|List-[I|V\d]+|सूची\s*[-–—]?[I|V\d१-४]+|Column\s+[I|V\d]+|स्तंभ\s*[-–—]?[I|V\d१-४]+|Choose\s+the\s+correct|Which\s+of\s+(?:these|those)\b|Which\s+of\s+the\s+(?:following|above|given|statements|pairs)|सही\s+उत्तर\s+चुनें|सुमेलित\s+कीजिए|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
+    const isSpecialItem = /^(?:(?:i{1,3}|iv|vi{0,3}|v|ix|x)\)\s|Column\s*[-–]\s*[IV\d]+|List\s*[-–]\s*[IV\d]+|\([A-Da-d1-4क-घअ-द१-४I-Vixv]+\)|[1-4१-४]\.|\•|Statement\s+[I|V|X\d]+|कथन\s*[1-4१-४I-V]|Assertion|Reason|अभिकथन|कारण|List-[I|V\d]+|सूची\s*[-–—]?[I|V\d१-४]+|Column\s+[I|V\d]+|स्तंभ\s*[-–—]?[I|V\d१-४]+|Choose\s+the\s+correct|Which\s+of\s+(?:these|those)\b|Which\s+of\s+the\s+(?:following|above|given|statements|pairs)|सही\s+उत्तर\s+चुनें|सुमेलित\s+कीजिए|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
     const prevEndsColon = /[:।]\s*$/.test(currentPara);
     const prevIsFormula = !/^\(\s*(?:[A-Da-d1-4]|i{1,3}|iv)\s*\)\s/.test(currentPara) && /^(?:x₁\s*=|(?:\([A-Za-z0-9_\s\+\/²]+\)))/i.test(currentPara);
 
@@ -2242,7 +2242,7 @@ function fitFontPt(text, wIn, hIn, startPt, minPt, charW = 0.52) {
   while (pt > minPt) {
     const cpl = Math.max(6, Math.floor((wIn * 72) / (pt * charW)));
     const lines = paras.reduce((a, l) => a + Math.max(1, Math.ceil(l.length / cpl)), 0);
-    if ((lines * pt * 1.22) / 72 <= hIn * 0.9) break;
+    if ((lines * pt * 1.17) / 72 <= hIn * 0.94) break;
     pt -= 1;
   }
   return Math.max(minPt, pt);
@@ -2250,7 +2250,7 @@ function fitFontPt(text, wIn, hIn, startPt, minPt, charW = 0.52) {
 
 async function addBadgeLayoutSlide(slide, q, o) {
   const A = o.tpl.anchors;
-  const charW = o.isHindi ? 0.62 : 0.52;
+  const charW = o.isHindi ? 0.62 : 0.54;
   const box = (r) => ({ x: r.left_ratio * o.slideW, y: r.top_ratio * o.slideH, w: r.width_ratio * o.slideW, h: r.height_ratio * o.slideH });
 
   // ---- Question zone (user-adjustable blue box); questions without options use the area down to the bottom
@@ -2266,13 +2266,13 @@ async function addBadgeLayoutSlide(slide, q, o) {
   const runs = [];
   runs.push({ text: `Q${q.q_num}. `, options: { fontSize: qPt + 2, bold: true, color: o.colQnumHex, fontFace: o.slideFontFace } });
   stemLines.forEach((line, i) => {
-    const isStmt = i > 0 && /^(?:\d\.|\([A-Da-d1-4ivx]+\)|•|Statement|Column|कथन|स्तंभ|Assertion|Reason)/.test(line);
-    runs.push({ text: line, options: { fontSize: i === 0 ? qPt : Math.max(10, Math.round(qPt * 0.95)), bold: true, color: isStmt ? o.colStmtHex : o.colStemHex, fontFace: o.slideFontFace, breakLine: true } });
+    const isStmt = i > 0 && /^(?:\d\.|\([A-Da-d1-4ivx]+\)|(?:i{1,3}|iv|vi{0,3}|v)\)\s|•|Statement|Column|List|कथन|स्तंभ|Assertion|Reason)/.test(line);
+    runs.push({ text: line, options: { fontSize: qPt, bold: true, color: isStmt ? o.colStmtHex : o.colStemHex, fontFace: o.slideFontFace, breakLine: true } });
   });
   if (o.solutionMode === 'inline' && q.solution) {
     runs.push({ text: q.solution.split('\n')[0] || '', options: { fontSize: Math.max(10, Math.round(qPt * 0.75)), bold: true, color: o.colAnsHex, fontFace: o.slideFontFace } });
   }
-  slide.addText(runs, { x: qz.x, y: qz.y, w: textW, h: qz.h, wrap: true, valign: noOptions ? 'top' : 'middle', fontFace: o.slideFontFace, fit: 'shrink' });
+  slide.addText(runs, { x: qz.x, y: qz.y, w: textW, h: qz.h, wrap: true, valign: noOptions ? 'top' : 'middle', fontFace: o.slideFontFace, lineSpacingMultiple: 0.95 });
 
   if (q.imageData) {
     const dW = qz.w * 0.38, dH = qz.h;
@@ -2296,7 +2296,7 @@ async function addBadgeLayoutSlide(slide, q, o) {
       slide.addImage({ data: img.dataUrl, x: z.x, y: z.y + (z.h - h) / 2, w, h });
     } else {
       slide.addText([{ text: q.options[k], options: { fontSize: optPt, bold: o.optBold, color: o.colOptTextHex, fontFace: o.slideFontFace } }],
-        { x: z.x, y: z.y, w: z.w, h: z.h, wrap: true, valign: 'middle', fontFace: o.slideFontFace, fit: 'shrink' });
+        { x: z.x, y: z.y, w: z.w, h: z.h, wrap: true, valign: 'middle', fontFace: o.slideFontFace, lineSpacingMultiple: 0.95 });
     }
   }
   // Template has fewer badges than the question has options (e.g. only A/B badges): list the rest under the last badge zone
