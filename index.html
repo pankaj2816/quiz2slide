@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quiz2Slide Studio - Free Online PDF to PPTX Quiz Generator</title>
-  <link rel="stylesheet" href="style.css?v=13.0">
+  <meta name="description" content="Convert any quiz or exam PDF (English or Hindi) into a PowerPoint deck - one question per slide, using your own PPTX template. Runs 100% in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=15.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -33,7 +35,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <span class="revision-badge" id="revBadge">🏷️ Rev 14.0 (Result &amp; Mobile Merger + Dual-Zone)</span>
+        <span class="revision-badge" id="revBadge">🏷️ Rev 15.0 (Real PPTX Templates + Custom Colors)</span>
         <span class="status-badge" id="appStatus">● 100% Private (Runs in Browser)</span>
       </div>
     </div>
@@ -84,6 +86,7 @@
             <span class="drop-icon">🖼️</span>
             <h3>PowerPoint Template or Background</h3>
             <p class="drop-help" id="pptFileLabel">Default: 7th SST Classroom Chalkboard</p>
+            <p class="drop-help drop-help-sm">Any .pptx works — its first slide (shapes, badges, pictures, background) is reused for every question.</p>
             <button type="button" class="btn btn-secondary btn-sm mt-2" id="btnUseDefaultPpt">Use Default Chalkboard</button>
           </div>
         </div>
@@ -162,6 +165,16 @@
                 🟩 Option Area
               </button>
             </div>
+          </div>
+
+          <!-- PPTX template status (Rev 15.0) -->
+          <div class="template-info hidden" id="tplInfo">
+            <div class="tpl-info-title" id="tplInfoTitle">📐 PowerPoint template loaded</div>
+            <div class="tpl-info-body" id="tplInfoBody"></div>
+            <label class="toggle-label mt-2" id="lblUseBadges">
+              <input type="checkbox" id="chkUseBadges" checked>
+              <span>Place options beside the template's A/B/C/D badges (no extra labels)</span>
+            </label>
           </div>
 
           <h3>Target Area Presets</h3>
@@ -317,25 +330,56 @@
             </label>
           </div>
 
-          <h3 class="mt-3">Color Palette</h3>
+          <h3 class="mt-3">🎨 Text Colors</h3>
+          <p class="hint-text">Pick any color for the question and a different color for the options. Your choice is remembered on this device.</p>
+          <div class="color-theme-row" id="colorThemeRow">
+            <button type="button" class="btn-color-theme" data-theme="chalkboard" title="Light text for dark/green boards"><span class="sw" style="background:#1E4D2B"></span>Chalkboard</button>
+            <button type="button" class="btn-color-theme" data-theme="dark" title="White question, cyan options for black templates"><span class="sw" style="background:#000"></span>Dark Slide</button>
+            <button type="button" class="btn-color-theme" data-theme="light" title="Dark text for white/light templates"><span class="sw" style="background:#fff;border:1px solid #999"></span>Light Slide</button>
+            <button type="button" class="btn-color-theme" data-theme="exam" title="Navy question, maroon options"><span class="sw" style="background:#FFF8E1;border:1px solid #999"></span>Exam Paper</button>
+          </div>
           <div class="color-picker-grid">
-            <div class="color-item">
-              <label>Section Tag</label>
-              <input type="color" id="colSection" value="#90CAF9">
+            <div class="color-item color-item-key">
+              <label>Question Text</label>
+              <input type="color" id="colStem" value="#FFFFFF">
+            </div>
+            <div class="color-item color-item-key">
+              <label>Option Text</label>
+              <input type="color" id="colOptText" value="#F5F5F5">
             </div>
             <div class="color-item">
               <label>Q. Number</label>
               <input type="color" id="colQnum" value="#FFD54F">
             </div>
             <div class="color-item">
-              <label>Question Text</label>
-              <input type="color" id="colStem" value="#FFFFFF">
-            </div>
-            <div class="color-item">
-              <label>Option Badges</label>
+              <label>Option Labels</label>
               <input type="color" id="colOptLabel" value="#FFD700">
             </div>
+            <div class="color-item">
+              <label>Section Tag</label>
+              <input type="color" id="colSection" value="#90CAF9">
+            </div>
+            <div class="color-item">
+              <label>Statements / Lists</label>
+              <input type="color" id="colStmt" value="#FFF5B4">
+            </div>
+            <div class="color-item">
+              <label>Answer (inline)</label>
+              <input type="color" id="colAnswer" value="#81C784">
+            </div>
+            <div class="color-item color-preview-item">
+              <label>Live Preview</label>
+              <div class="color-preview" id="colorPreview">
+                <div><b id="cpQnum">Q1.</b> <b id="cpStem">Question text</b></div>
+                <div><b id="cpLbl">(A)</b> <span id="cpOpt">Option text</span></div>
+              </div>
+            </div>
           </div>
+          <label class="toggle-label mt-2">
+            <input type="checkbox" id="chkBoldOptions">
+            <span>Bold option text</span>
+          </label>
+          <button type="button" class="btn btn-secondary btn-sm mt-2" id="btnResetColors">↺ Reset colors</button>
         </div>
       </div>
     </section>
@@ -548,6 +592,7 @@
     <p class="credit-line">Designed &amp; Developed by <a href="https://pixeltocloud.com?utm_source=quiz2slide&amp;utm_medium=footer_credit&amp;utm_campaign=client_referral" target="_blank" rel="noopener">PixelToCloud</a></p>
   </footer>
 
-  <script src="app.js?v=14.0"></script>
+  <script src="template_engine.js?v=15.0"></script>
+  <script src="app.js?v=15.0"></script>
 </body>
 </html>

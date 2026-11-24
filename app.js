@@ -30,6 +30,8 @@ let state = {
   pdfArrayBuffer: null,
   pdfFileName: '',
   bgImageBase64: typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : null,
+  template: null, // analyzed real PPTX template (Rev 15.0)
+  colorsCustomized: false,
   parsedQuestions: [],
   questionDiagrams: [], // [ { pno, qNum, section, snippet, dataUrl } ]
   lastGeneratedBlob: null,
@@ -114,6 +116,24 @@ const colSection = document.getElementById('colSection');
 const colQnum = document.getElementById('colQnum');
 const colStem = document.getElementById('colStem');
 const colOptLabel = document.getElementById('colOptLabel');
+const colOptText = document.getElementById('colOptText');
+const colStmt = document.getElementById('colStmt');
+const colAnswer = document.getElementById('colAnswer');
+const chkBoldOptions = document.getElementById('chkBoldOptions');
+const chkUseBadges = document.getElementById('chkUseBadges');
+const tplInfo = document.getElementById('tplInfo');
+const tplInfoTitle = document.getElementById('tplInfoTitle');
+const tplInfoBody = document.getElementById('tplInfoBody');
+const lblUseBadges = document.getElementById('lblUseBadges');
+
+// Text color themes (hex without #)
+const COLOR_THEMES = {
+  chalkboard: { colStem: '#FFFFFF', colOptText: '#F5F5F5', colQnum: '#FFD54F', colOptLabel: '#FFD700', colSection: '#90CAF9', colStmt: '#FFF5B4', colAnswer: '#81C784', preview: '#1E4D2B' },
+  dark:       { colStem: '#FFFFFF', colOptText: '#7FE7FF', colQnum: '#FFC000', colOptLabel: '#FFC000', colSection: '#9EC5FF', colStmt: '#FFE08A', colAnswer: '#7CFC9A', preview: '#000000' },
+  light:      { colStem: '#1F2937', colOptText: '#1D4ED8', colQnum: '#B45309', colOptLabel: '#B91C1C', colSection: '#475569', colStmt: '#7C2D12', colAnswer: '#15803D', preview: '#FFFFFF' },
+  exam:       { colStem: '#0B2545', colOptText: '#7A1F2B', colQnum: '#C2410C', colOptLabel: '#7A1F2B', colSection: '#334155', colStmt: '#134E4A', colAnswer: '#166534', preview: '#FFF8E1' }
+};
+const COLOR_IDS = ['colStem', 'colOptText', 'colQnum', 'colOptLabel', 'colSection', 'colStmt', 'colAnswer'];
 
 const btnGeneratePpt = document.getElementById('btnGeneratePpt');
 const genStatusText = document.getElementById('genStatusText');
@@ -158,8 +178,132 @@ document.addEventListener('DOMContentLoaded', () => {
   setupFontScalingControls();
   setupGenerator();
   setupResultMerger();
+  setupColorControls();
   loadDefaultTemplatePreview();
 });
+
+// ---------- Text color controls: themes, live preview, remembered on this device ----------
+function setupColorControls() {
+  const store = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+  const preview = document.getElementById('colorPreview');
+  let previewBg = '#1E4D2B';
+
+  const updatePreview = () => {
+    const set = (id, el) => { const n = document.getElementById(el); if (n) n.style.color = document.getElementById(id).value; };
+    set('colQnum', 'cpQnum'); set('colStem', 'cpStem'); set('colOptLabel', 'cpLbl'); set('colOptText', 'cpOpt');
+    const cpOpt = document.getElementById('cpOpt');
+    if (cpOpt) cpOpt.style.fontWeight = chkBoldOptions && chkBoldOptions.checked ? '700' : '400';
+    if (preview) preview.style.background = previewBg;
+  };
+  const save = () => {
+    if (!store) return;
+    try {
+      const data = { bold: !!(chkBoldOptions && chkBoldOptions.checked), previewBg };
+      COLOR_IDS.forEach(id => data[id] = document.getElementById(id).value);
+      store.setItem('q2s_colors_v1', JSON.stringify(data));
+    } catch (e) { /* storage unavailable */ }
+  };
+  window.applyColorTheme = (name, persist = true) => {
+    const t = COLOR_THEMES[name];
+    if (!t) return;
+    COLOR_IDS.forEach(id => { const el = document.getElementById(id); if (el && t[id]) el.value = t[id]; });
+    previewBg = t.preview;
+    document.querySelectorAll('.btn-color-theme').forEach(b => b.classList.toggle('active', b.dataset.theme === name));
+    updatePreview();
+    if (persist) save();
+  };
+  window.setColorPreviewBg = (hex) => { previewBg = hex; updatePreview(); };
+
+  // restore saved colors
+  try {
+    const saved = store && JSON.parse(store.getItem('q2s_colors_v1') || 'null');
+    if (saved) {
+      COLOR_IDS.forEach(id => { if (saved[id] && document.getElementById(id)) document.getElementById(id).value = saved[id]; });
+      if (chkBoldOptions) chkBoldOptions.checked = !!saved.bold;
+      if (saved.previewBg) previewBg = saved.previewBg;
+      state.colorsCustomized = true;
+    }
+  } catch (e) { /* ignore */ }
+
+  COLOR_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => {
+      state.colorsCustomized = true;
+      document.querySelectorAll('.btn-color-theme').forEach(b => b.classList.remove('active'));
+      updatePreview(); save();
+    });
+  });
+  if (chkBoldOptions) chkBoldOptions.addEventListener('change', () => { updatePreview(); save(); });
+  document.querySelectorAll('.btn-color-theme').forEach(btn => btn.addEventListener('click', () => {
+    state.colorsCustomized = true;
+    window.applyColorTheme(btn.dataset.theme);
+  }));
+  const btnReset = document.getElementById('btnResetColors');
+  if (btnReset) btnReset.addEventListener('click', () => {
+    state.colorsCustomized = false;
+    if (chkBoldOptions) chkBoldOptions.checked = false;
+    window.applyColorTheme('chalkboard');
+  });
+  updatePreview();
+}
+
+function isDarkHex(hex) {
+  if (!hex) return true;
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+}
+
+function clearTemplateState() {
+  state.template = null;
+  if (tplInfo) tplInfo.classList.add('hidden');
+}
+
+// Load a real .pptx template: keep its slide design, preview it, auto-detect Question/A-D badges
+async function loadPptxTemplate(file) {
+  const tpl = await Q2STemplate.analyzePptxTemplate(file);
+  const previewUrl = await Q2STemplate.renderTemplatePreview(tpl, 1600);
+  state.template = tpl;
+  state.bgImageBase64 = null;
+  renderCanvasImage(previewUrl);
+
+  const A = tpl.anchors;
+  const sizeTxt = `${tpl.widthIn.toFixed(2)}" × ${tpl.heightIn.toFixed(2)}"`;
+  tplInfo.classList.remove('hidden', 'warn');
+  if (A && A.hasBadges) {
+    const badgeKeys = Object.keys(A.badges).sort().join(' / ');
+    tplInfoTitle.innerText = '✅ Smart template detected';
+    tplInfoBody.innerHTML = `Slide size <b>${sizeTxt}</b>. Found ${A.questionBadge ? 'a <b>Question</b> badge and ' : ''}option badges <b>${badgeKeys}</b>. ` +
+      `Each option will be written beside its badge automatically; the <b>blue Question Area</b> below can still be moved or resized.`;
+    lblUseBadges.style.display = '';
+    chkUseBadges.checked = true;
+    // show the detected zones in dual mode
+    state.qBbox = { ...A.questionRatio };
+    if (A.optionsRatio) state.optBbox = { ...A.optionsRatio };
+    btnModeDual.click();
+  } else {
+    tplInfoTitle.innerText = '📐 PowerPoint template loaded';
+    tplInfoBody.innerHTML = `Slide size <b>${sizeTxt}</b>. Every slide in the template's design is kept. ` +
+      `No A/B/C/D badges were found, so drag the box on the preview to choose where the question and options go.`;
+    lblUseBadges.style.display = 'none';
+    chkUseBadges.checked = false;
+    const cb = tpl.contentShapes && tpl.contentShapes.box;
+    state.bbox = cb && cb.width_ratio > 0.2 && cb.height_ratio > 0.15
+      ? { ...cb }
+      : { left_ratio: 0.07, top_ratio: 0.12, width_ratio: 0.86, height_ratio: 0.78 };
+    btnModeUnified.click();
+  }
+  if (tpl.stripContent) {
+    tplInfoBody.innerHTML += ` <br>The first slide already contained sample text — it is removed from the copies and its position is used as the text area.`;
+  }
+  if (tpl.slideCount > 1) {
+    tplInfoBody.innerHTML += ` <br>Note: the template has ${tpl.slideCount} slides — the <b>first slide</b> is used as the design.`;
+  }
+  // readable text colors for the template background (unless the user picked their own)
+  const dark = isDarkHex(tpl.bgHex);
+  if (!state.colorsCustomized) window.applyColorTheme(dark ? (tpl.bgHex && tpl.bgHex.toUpperCase() === '000000' ? 'dark' : 'chalkboard') : 'light', false);
+  if (window.setColorPreviewBg && tpl.bgHex) window.setColorPreviewBg('#' + tpl.bgHex);
+}
 
 // Setup Mode Switcher (Unified vs Dual Area)
 function setupAreaModeSwitch() {
@@ -280,34 +424,18 @@ function setupFileUploads() {
       
       if (ext === 'pptx') {
         try {
-          const zip = await JSZip.loadAsync(file);
-          const mediaFiles = Object.keys(zip.files).filter(f => f.startsWith('ppt/media/') && (f.endsWith('.png') || f.endsWith('.jpg') || f.endsWith('.jpeg')));
-          if (mediaFiles.length > 0) {
-            let largestName = mediaFiles[0];
-            let largestSize = 0;
-            for (const mf of mediaFiles) {
-              const fileData = zip.files[mf];
-              if (fileData._data && fileData._data.uncompressedSize > largestSize) {
-                largestSize = fileData._data.uncompressedSize;
-                largestName = mf;
-              }
-            }
-            const imgBlob = await zip.files[largestName].async('blob');
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-              state.bgImageBase64 = evt.target.result;
-              pptDropzone.classList.add('has-file');
-              pptFileLabel.innerText = `PPTX Template: ${file.name}`;
-              renderCanvasImage(state.bgImageBase64);
-            };
-            reader.readAsDataURL(imgBlob);
-          } else {
-            alert('No background images found in uploaded PPTX.');
-          }
+          pptFileLabel.innerText = `Reading template: ${file.name}...`;
+          await loadPptxTemplate(file);
+          pptDropzone.classList.add('has-file');
+          pptFileLabel.innerText = `PPTX Template: ${file.name}`;
         } catch (err) {
-          alert('Could not read PPTX: ' + err.message);
+          console.error(err);
+          clearTemplateState();
+          pptFileLabel.innerText = 'Default: 7th SST Classroom Chalkboard';
+          alert('Could not read this PowerPoint template: ' + err.message);
         }
       } else {
+        clearTemplateState();
         const reader = new FileReader();
         reader.onload = function(evt) {
           state.bgImageBase64 = evt.target.result;
@@ -322,6 +450,8 @@ function setupFileUploads() {
 
   btnUseDefaultPpt.addEventListener('click', (e) => {
     e.stopPropagation();
+    clearTemplateState();
+    pptFileInput.value = '';
     state.bgImageBase64 = typeof DEFAULT_CHALKBOARD_BASE64 !== 'undefined' ? DEFAULT_CHALKBOARD_BASE64 : null;
     pptDropzone.classList.remove('has-file');
     pptFileLabel.innerText = 'Default: 7th SST Classroom Chalkboard';
@@ -1245,9 +1375,9 @@ function reflowStemParagraphs(stem) {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    const isSpecialItem = /^(?:\([A-Da-d1-4क-घअ-द१-४I-Vixv]+\)|[1-4१-४]\.|\•|Statement\s+[I|V|X\d]+|कथन\s*[1-4१-४I-V]|Assertion|Reason|अभिकथन|कारण|List-[I|V\d]+|सूची\s*[-–—]?[I|V\d१-४]+|Column\s+[I|V\d]+|स्तंभ\s*[-–—]?[I|V\d१-४]+|Choose\s+the\s+correct|सही\s+उत्तर\s+चुनें|सुमेलित\s+कीजिए|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
+    const isSpecialItem = /^(?:\([A-Da-d1-4क-घअ-द१-४I-Vixv]+\)|[1-4१-४]\.|\•|Statement\s+[I|V|X\d]+|कथन\s*[1-4१-४I-V]|Assertion|Reason|अभिकथन|कारण|List-[I|V\d]+|सूची\s*[-–—]?[I|V\d१-४]+|Column\s+[I|V\d]+|स्तंभ\s*[-–—]?[I|V\d१-४]+|Choose\s+the\s+correct|Which\s+of\s+the\s+(?:following|above|statements)|सही\s+उत्तर\s+चुनें|सुमेलित\s+कीजिए|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
     const prevEndsColon = /[:।]\s*$/.test(currentPara);
-    const prevIsFormula = /^(?:x₁\s*=|(?:\([A-Za-z0-9_\s\+\/²]+\)))/i.test(currentPara);
+    const prevIsFormula = !/^\(\s*(?:[A-Da-d1-4]|i{1,3}|iv)\s*\)\s/.test(currentPara) && /^(?:x₁\s*=|(?:\([A-Za-z0-9_\s\+\/²]+\)))/i.test(currentPara);
 
     if (isSpecialItem || prevEndsColon || prevIsFormula) {
       result.push(currentPara);
@@ -1263,16 +1393,39 @@ function reflowStemParagraphs(stem) {
 // Universal Question Parser: Handles Standard Exams, Hindi & Devanagari, Careers360, JEE, NEET, CBSE
 function parseUniversalQuestions(fullStream) {
   // Matches Q. 1, Question 1, प्रश्न 1., प्र. 1., प्र० 1., प्रश्न संख्या 1, प्रश्न १., and standalone 1. in Hindi/Devanagari
-  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Za-z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|General\s+Studies|Hindi|English|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग|(?:खंड|भाग)\s*[-–—:]\s*[क-घअ-दA-Da-d1-4०-९]+)\s*\n+)?\s*(?:(?:Q\.?|Question|Que\.?|question|que\.?|प्रश्न|प्र(?:श्न)?[\.०\s]*(?:संख्या|सं[\.०])?)\s*[:\.\-]?\s*([0-9०-९]+)|([0-9०-९]+)[\.\:\-]\s+(?=[\u0900-\u097F]|['"‘“]\s*[\u0900-\u097F]))\s*[:\.\-–—]?\s*/g;
+  const qPat = /(?:^|\n)\s*(?:(?:Section\s+[A-Za-z0-9]+:?|Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|General\s+Studies|Hindi|English|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग|(?:खंड|भाग)\s*[-–—:]\s*[क-घअ-दA-Da-d1-4०-९]+)\s*\n+)?\s*(?:(?:Q\.?|Question|Que\.?|question|que\.?|प्रश्न|प्र(?:श्न)?[\.०\s]*(?:संख्या|सं[\.०])?)\s*[:\.\-]?\s*([0-9०-९]+)|([0-9०-९]{1,3})[\.\:\-\)]\s+(?=[ऀ-ॿA-Za-z]|['"‘“(]\s*[ऀ-ॿA-Za-z]))\s*[:\.\-–—]?\s*/g;
 
-  let matches = [];
+  let rawMatches = [];
   let m;
   while ((m = qPat.exec(fullStream)) !== null) {
-    matches.push(m);
+    rawMatches.push(m);
+  }
+
+  // Sequence guard for bare "1." numbering (English & Hindi papers): a bare number starts a new question
+  // only when it continues the sequence (N = last + 1) AND the previous question already showed options,
+  // or when numbering restarts at 1 right after a Section heading. This stops instruction lists and
+  // numbered statements ("1. ... 2. ...") inside a question from being split into fake questions.
+  const OPT_MARK_RE = /\(\s*[A-Da-dक-घअ-द1-4१-४]\s*\)|(?:^|\s)[A-Da-d][\.\)]\s/g;
+  const SECTION_RE = /(?:Section\s+[A-Za-z0-9]+|खंड|भाग|Part\s+[A-Z0-9]+)[^\n]*\n\s*$/i;
+  let matches = [];
+  let lastNum = 0;
+  for (const mm of rawMatches) {
+    const isPrefixed = !!mm[1];
+    const n = parseInt(devanagariToWesternDigits(mm[1] || mm[2]), 10);
+    if (isPrefixed) { matches.push(mm); lastNum = n; continue; }
+    const prev = matches[matches.length - 1];
+    const between = prev ? fullStream.slice(prev.index + prev[0].length, mm.index) : '';
+    const optCount = (between.match(OPT_MARK_RE) || []).length;
+    const before = fullStream.slice(Math.max(0, mm.index - 200), mm.index + 1);
+    const sectionRestart = n === 1 && SECTION_RE.test(before);
+    if (!prev || sectionRestart || (n === lastNum + 1 && optCount >= 2)) {
+      matches.push(mm);
+      lastNum = n;
+    }
   }
 
   let questions = [];
-  let currentSection = 'Hindi';
+  let currentSection = '';
 
   for (let i = 0; i < matches.length; i++) {
     const match = matches[i];
@@ -1280,10 +1433,13 @@ function parseUniversalQuestions(fullStream) {
     const qNumStr = devanagariToWesternDigits(rawQNum);
     const qNum = parseInt(qNumStr, 10);
 
-    const preChunk = fullStream.slice(Math.max(0, match.index - 120), match.index);
-    const secMatch = (match[0] + " " + preChunk).match(/(?:^|[\s\n\r])(Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|General\s+Studies|Hindi|English|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग|(?:खंड|भाग)\s*[-–—:]\s*[क-घअ-दA-Da-d1-4०-९]+|Section\s+[A-Za-z0-9]+:?[^\n]*)/i);
-    if (secMatch) {
-      currentSection = secMatch[1].trim();
+    // Section detection: only whole heading lines count (so a word like "English" inside a question is ignored)
+    const preLines = (fullStream.slice(Math.max(0, match.index - 300), match.index) + '\n' + match[0]).split('\n').map(l => l.trim()).filter(Boolean);
+    for (let li = preLines.length - 1; li >= 0; li--) {
+      const ln = preLines[li];
+      const secLine = ln.match(/^((?:Section|Part)\s+[A-Za-z0-9]+\b.*|(?:खंड|भाग)\s*[-–—:]?\s*[क-घअ-दA-Da-d1-4०-९]+.*)$/i) ||
+        ln.match(/^(Physics|Chemistry|Mathematics|Biology|Social\s+Science|General\s+Knowledge|General\s+Studies|Hindi|English|Science|EVS|भौतिक\s*विज्ञान|भौतिकी|रसायन\s*विज्ञान|रसायन\s*शास्त्र|गणित|जीव\s*विज्ञान|सामाजिक\s*विज्ञान|सामान्य\s*ज्ञान|सामान्य\s*अध्ययन|हिंदी|हिन्दी|अंग्रेजी|पर्यावरण\s*अध्ययन|बाल\s*विकास|तर्कशक्ति|रीजनिंग)\s*:?\s*$/i);
+      if (secLine) { currentSection = secLine[1].trim(); break; }
     }
 
     const startIdx = match.index + match[0].length;
@@ -1378,6 +1534,10 @@ function parseUniversalQuestions(fullStream) {
     });
   }
 
+  // Drop preamble entries (e.g. numbered "Instructions") that appear before the first real MCQ
+  const firstMcq = questions.findIndex(q => q.options.A && q.options.B && q.options.C);
+  if (firstMcq > 0) questions.splice(0, firstMcq);
+
   return questions;
 }
 
@@ -1407,10 +1567,10 @@ function renderQuestionsList(questions) {
       <div class="q-stem" contenteditable="true" data-field="question">${escapeHtml(q.question)}</div>
       ${q.imageData ? `<div class="q-diagram-preview"><img src="${q.imageData}" alt="Question ${q.q_num} Diagram" style="max-width: 340px; border-radius: 6px; margin: 8px 0; border: 1px solid rgba(255,255,255,0.2);"></div>` : ''}
       <div class="q-options">
-        ${q.options.A ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.A) || '(A)'}</span> ${escapeHtml(q.options.A)}</div>` : ''}
-        ${q.options.B ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.B) || '(B)'}</span> ${escapeHtml(q.options.B)}</div>` : ''}
-        ${q.options.C ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.C) || '(C)'}</span> ${escapeHtml(q.options.C)}</div>` : ''}
-        ${q.options.D ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.D) || '(D)'}</span> ${escapeHtml(q.options.D)}</div>` : ''}
+        ${q.options.A ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.A) || '(A)'}</span> <span class="q-opt-text" contenteditable="true" data-idx="${idx}" data-k="A">${escapeHtml(q.options.A)}</span></div>` : ''}
+        ${q.options.B ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.B) || '(B)'}</span> <span class="q-opt-text" contenteditable="true" data-idx="${idx}" data-k="B">${escapeHtml(q.options.B)}</span></div>` : ''}
+        ${q.options.C ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.C) || '(C)'}</span> <span class="q-opt-text" contenteditable="true" data-idx="${idx}" data-k="C">${escapeHtml(q.options.C)}</span></div>` : ''}
+        ${q.options.D ? `<div class="q-opt"><span>${(q.optLabels && q.optLabels.D) || '(D)'}</span> <span class="q-opt-text" contenteditable="true" data-idx="${idx}" data-k="D">${escapeHtml(q.options.D)}</span></div>` : ''}
       </div>
       ${q.solution ? `
         <details class="q-sol-accordion">
@@ -1424,6 +1584,12 @@ function renderQuestionsList(questions) {
   document.querySelectorAll('.q-stem').forEach((el, idx) => {
     el.addEventListener('blur', () => {
       state.parsedQuestions[idx].question = el.innerText.trim();
+    });
+  });
+  document.querySelectorAll('.q-opt-text').forEach(el => {
+    el.addEventListener('blur', () => {
+      const q = state.parsedQuestions[+el.dataset.idx];
+      if (q) q.options[el.dataset.k] = el.innerText.replace(/\s+/g, ' ').trim();
     });
   });
 }
@@ -1452,10 +1618,18 @@ function setupGenerator() {
 
     try {
       const pptx = new PptxGenJS();
-      pptx.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 inches (PowerPoint Standard Widescreen)
-
-      const slideW = 13.333;
-      const slideH = 7.5;
+      const tpl = state.template; // real PPTX template (cloned per slide) or null
+      let slideW = 13.333, slideH = 7.5;
+      if (tpl) {
+        slideW = +tpl.widthIn.toFixed(3);
+        slideH = +tpl.heightIn.toFixed(3);
+        pptx.defineLayout({ name: 'Q2S_TEMPLATE', width: slideW, height: slideH });
+        pptx.layout = 'Q2S_TEMPLATE';
+      } else {
+        pptx.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 inches (PowerPoint Standard Widescreen)
+      }
+      const badgeMode = !!(tpl && tpl.anchors && tpl.anchors.hasBadges && chkUseBadges && chkUseBadges.checked);
+      const slideKinds = [];
 
       const isDual = state.areaMode === 'dual';
 
@@ -1481,12 +1655,17 @@ function setupGenerator() {
       const colQnumHex = colQnum.value.replace('#', '');
       const colStemHex = colStem.value.replace('#', '');
       const colOptLblHex = colOptLabel.value.replace('#', '');
+      const colOptTextHex = colOptText.value.replace('#', '');
+      const colStmtHex = colStmt.value.replace('#', '');
+      const colAnsHex = colAnswer.value.replace('#', '');
+      const optBold = !!(chkBoldOptions && chkBoldOptions.checked);
 
       const solutionMode = document.querySelector('input[name="solutionMode"]:checked')?.value || 'ignore';
       const fontScaleFactor = (parseFloat(inputFontScale ? inputFontScale.value : 100) || 100) / 100;
 
       // Define Slide Master ONCE with background image object
-      if (state.bgImageBase64) {
+      const useBgMaster = !tpl && !!state.bgImageBase64;
+      if (useBgMaster) {
         pptx.defineSlideMaster({
           title: "CHALKBOARD_MASTER",
           background: { color: "1E4D2B" },
@@ -1507,9 +1686,10 @@ function setupGenerator() {
           await new Promise(resolve => setTimeout(resolve, 0));
         }
 
-        const slide = state.bgImageBase64 
+        const slide = useBgMaster
           ? pptx.addSlide({ masterName: "CHALKBOARD_MASTER" })
           : pptx.addSlide();
+        slideKinds.push('q');
 
         const stemLines = q.question.split('\n');
         const maxOptLen = Math.max(
@@ -1523,8 +1703,15 @@ function setupGenerator() {
         const slideFontFace = isHindi ? 'Nirmala UI' : 'Segoe UI';
         const getOptLbl = (k) => (q.optLabels && q.optLabels[k]) ? `${q.optLabels[k]} ` : `(${k}) `;
 
+        // 0. Template Badge Layout: question under the "Question" badge, each option beside its A/B/C/D badge
+        if (badgeMode) {
+          await addBadgeLayoutSlide(slide, q, {
+            tpl, slideW, slideH, fontScaleFactor, slideFontFace, isHindi, solutionMode,
+            colSecHex, colQnumHex, colStemHex, colStmtHex, colAnsHex, colOptTextHex, optBold
+          });
+        }
         // 1. Question with Genuine Diagram (e.g. Q4 lens, Q5 plates, Q13 lamina, Q17 surface, Q19 bob)
-        if (q.imageData) {
+        else if (q.imageData) {
           const topH = Math.min(1.4, 1.1 * fontScaleFactor);
           const topStPt = Math.max(11, Math.round(14 * fontScaleFactor));
           const topQPt = Math.max(13, Math.round(17 * fontScaleFactor));
@@ -1571,7 +1758,7 @@ function setupGenerator() {
                 } else {
                   slide.addText([
                     { text: getOptLbl(k), options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-                    { text: q.options[k], options: { fontSize: botOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                    { text: q.options[k], options: { fontSize: botOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
                   ], { x: botL, y: curDiagOptY, w: botW, h: diagOptSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                 }
                 curDiagOptY += diagOptSpacing;
@@ -1586,13 +1773,13 @@ function setupGenerator() {
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
                 textRunsBot.push({ text: getOptLbl(k), options: { fontSize: botOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
-                textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
+                textRunsBot.push({ text: q.options[k] || '', options: { fontSize: botOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace, breakLine: true } });
               }
             }
 
             if (solutionMode === 'inline' && q.solution) {
               const ansLine = q.solution.split('\n')[0] || '';
-              textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: '81C784', fontFace: slideFontFace } });
+              textRunsBot.push({ text: '\n' + ansLine, options: { fontSize: Math.max(10.5, Math.round(11.5 * fontScaleFactor)), bold: true, color: colAnsHex, fontFace: slideFontFace } });
             }
 
             slide.addText(textRunsBot, { x: botL, y: botT, w: botW, h: botH, wrap: true, valign: 'top', fontFace: slideFontFace });
@@ -1640,7 +1827,7 @@ function setupGenerator() {
               } else {
                 slide.addText([
                   { text: getOptLbl('A'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-                  { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                  { text: q.options.A, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
                 ], { x: col1X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
@@ -1653,7 +1840,7 @@ function setupGenerator() {
               } else {
                 slide.addText([
                   { text: getOptLbl('C'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-                  { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                  { text: q.options.C, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
                 ], { x: col1X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
@@ -1666,7 +1853,7 @@ function setupGenerator() {
               } else {
                 slide.addText([
                   { text: getOptLbl('B'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-                  { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                  { text: q.options.B, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
                 ], { x: col2X, y: row1Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
@@ -1679,7 +1866,7 @@ function setupGenerator() {
               } else {
                 slide.addText([
                   { text: getOptLbl('D'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-                  { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                  { text: q.options.D, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
                 ], { x: col2X, y: row2Y, w: colW, h: 0.8, wrap: true, valign: 'top', fontFace: slideFontFace });
               }
             }
@@ -1687,19 +1874,19 @@ function setupGenerator() {
             // Col 1 (A & C)
             slide.addText([
               { text: getOptLbl('A'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-              { text: q.options.A, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } },
+              { text: q.options.A, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace, breakLine: true } },
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
               { text: getOptLbl('C'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-              { text: q.options.C, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+              { text: q.options.C, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
             ], { x: col1X, y: row1Y, w: colW, h: rowBoxH, wrap: true, valign: 'top', fontFace: slideFontFace });
 
             // Col 2 (B & D)
             slide.addText([
               { text: getOptLbl('B'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-              { text: q.options.B, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } },
+              { text: q.options.B, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace, breakLine: true } },
               { text: '\n', options: { fontSize: Math.max(6, Math.round(10 * fontScaleFactor)), breakLine: true } },
               { text: getOptLbl('D'), options: { fontSize: gOptPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-              { text: q.options.D, options: { fontSize: gOptPt, color: 'F5F5F5', fontFace: slideFontFace } }
+              { text: q.options.D, options: { fontSize: gOptPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
             ], { x: col2X, y: row1Y, w: colW, h: rowBoxH, wrap: true, valign: 'top', fontFace: slideFontFace });
           }
         }
@@ -1751,7 +1938,7 @@ function setupGenerator() {
             for (let i = 1; i < stemLines.length; i++) {
               const sub = stemLines[i];
               const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
-              qRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, fontFace: slideFontFace, breakLine: true } });
+              qRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? colStmtHex : colStemHex, fontFace: slideFontFace, breakLine: true } });
             }
 
             slide.addText(qRuns, {
@@ -1777,7 +1964,7 @@ function setupGenerator() {
                   } else {
                     slide.addText([
                       { text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-                      { text: q.options[k], options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                      { text: q.options[k], options: { fontSize: optPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
                     ], { x: optLeft, y: curOptY, w: optWidth, h: optSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                   }
                   curOptY += optSpacing;
@@ -1788,12 +1975,12 @@ function setupGenerator() {
               for (const k of ['A', 'B', 'C', 'D']) {
                 if (q.options[k]) {
                   optRuns.push({ text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
-                  optRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
+                  optRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace, breakLine: true } });
                 }
               }
               if (solutionMode === 'inline' && q.solution) {
                 const ansLine = q.solution.split('\n')[0] || '';
-                optRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784', fontFace: slideFontFace } });
+                optRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: colAnsHex, fontFace: slideFontFace } });
               }
               slide.addText(optRuns, {
                 x: optLeft,
@@ -1823,7 +2010,7 @@ function setupGenerator() {
                 slide.addText(headerRuns, { x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top', fontFace: slideFontFace });
                 curContentY += lineH + 0.05;
               } else if (isMathExpression(sub)) {
-                const svgMath = renderMathOptionToSvg(null, sub, Math.round(stPt * 0.95), '#FFF5B4');
+                const svgMath = renderMathOptionToSvg(null, sub, Math.round(stPt * 0.95), '#' + colStmtHex);
                 const imgMath = await svgToPngDataUrl(svgMath);
                 slide.addImage({ data: imgMath.dataUrl, x: bLeft, y: curContentY, w: imgMath.widthInches, h: imgMath.heightInches });
                 curContentY += imgMath.heightInches + 0.08;
@@ -1831,7 +2018,7 @@ function setupGenerator() {
                 const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
                 const subLines = Math.max(1, Math.ceil(sub.length / charsPerLine));
                 const lineH = (subLines * stPt * 1.35 * 0.95) / 72 + 0.1;
-                slide.addText([{ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, fontFace: slideFontFace } }], {
+                slide.addText([{ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? colStmtHex : colStemHex, fontFace: slideFontFace } }], {
                   x: bLeft, y: curContentY, w: bWidth, h: lineH, wrap: true, valign: 'top', fontFace: slideFontFace
                 });
                 curContentY += lineH + 0.05;
@@ -1851,7 +2038,7 @@ function setupGenerator() {
                 } else {
                   slide.addText([
                     { text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } },
-                    { text: q.options[k], options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace } }
+                    { text: q.options[k], options: { fontSize: optPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace } }
                   ], { x: bLeft, y: curContentY, w: bWidth, h: optSpacing, wrap: true, valign: 'top', fontFace: slideFontFace });
                 }
                 curContentY += optSpacing;
@@ -1868,7 +2055,7 @@ function setupGenerator() {
             for (let i = 1; i < stemLines.length; i++) {
               const sub = stemLines[i];
               const isStmt = sub.startsWith('1.') || sub.startsWith('2.') || sub.startsWith('3.') || sub.startsWith('•') || sub.startsWith('Statement') || sub.startsWith('Column');
-              textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? 'FFF5B4' : colStemHex, fontFace: slideFontFace, breakLine: true } });
+              textRuns.push({ text: sub, options: { fontSize: stPt * 0.95, bold: true, color: isStmt ? colStmtHex : colStemHex, fontFace: slideFontFace, breakLine: true } });
             }
 
             textRuns.push({ text: '', options: { fontSize: spPt, breakLine: true } });
@@ -1876,14 +2063,14 @@ function setupGenerator() {
             for (const k of ['A', 'B', 'C', 'D']) {
               if (q.options[k]) {
                 textRuns.push({ text: getOptLbl(k), options: { fontSize: optPt, bold: true, color: colOptLblHex, fontFace: slideFontFace } });
-                textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } });
+                textRuns.push({ text: q.options[k] || '', options: { fontSize: optPt, color: colOptTextHex, bold: optBold, fontFace: slideFontFace, breakLine: true } });
               }
             }
 
             // If Inline Answer Mode is selected
             if (solutionMode === 'inline' && q.solution) {
               const ansLine = q.solution.split('\n')[0] || '';
-              textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: '81C784', fontFace: slideFontFace } });
+              textRuns.push({ text: '\n\n' + ansLine, options: { fontSize: Math.max(11, Math.round(13 * fontScaleFactor)), bold: true, color: colAnsHex, fontFace: slideFontFace } });
             }
 
             slide.addText(textRuns, {
@@ -1900,14 +2087,15 @@ function setupGenerator() {
 
         // 4. If Separate Solution Slide Mode is selected
         if (solutionMode === 'separate' && q.solution) {
-          const solSlide = state.bgImageBase64 
+          const solSlide = useBgMaster
             ? pptx.addSlide({ masterName: "CHALKBOARD_MASTER" })
             : pptx.addSlide();
+          slideKinds.push('sol');
 
           const solRuns = [
-            { text: `💡 SOLUTION & EXPLANATION — Q${q.q_num}`, options: { fontSize: 15, bold: true, color: 'FFD54F', fontFace: slideFontFace, breakLine: true } },
-            { text: `${stemLines[0].slice(0, 100)}${stemLines[0].length > 100 ? '...' : ''}\n\n`, options: { fontSize: 12, italic: true, color: '90CAF9', fontFace: slideFontFace, breakLine: true } },
-            { text: q.solution, options: { fontSize: 14, color: 'F5F5F5', fontFace: slideFontFace, breakLine: true } }
+            { text: `💡 SOLUTION & EXPLANATION — Q${q.q_num}`, options: { fontSize: 15, bold: true, color: colQnumHex, fontFace: slideFontFace, breakLine: true } },
+            { text: `${stemLines[0].slice(0, 100)}${stemLines[0].length > 100 ? '...' : ''}\n\n`, options: { fontSize: 12, italic: true, color: colSecHex, fontFace: slideFontFace, breakLine: true } },
+            { text: q.solution, options: { fontSize: 14, color: colStemHex, fontFace: slideFontFace, breakLine: true } }
           ];
 
           solSlide.addText(solRuns, {
@@ -1924,7 +2112,11 @@ function setupGenerator() {
 
       genStatusText.innerText = 'Packaging presentation file...';
       const outName = `Quiz_Presentation_${state.parsedQuestions.length}_Slides.pptx`;
-      const pptBlob = await pptx.write({ outputType: 'blob' });
+      let pptBlob = await pptx.write({ outputType: 'blob' });
+      if (tpl) {
+        genStatusText.innerText = 'Applying your PowerPoint template design to every slide...';
+        pptBlob = await Q2STemplate.mergeIntoTemplate(tpl, pptBlob, slideKinds);
+      }
       state.lastGeneratedBlob = pptBlob;
 
       // Ask User for Directory to Save using Native Browser "Save As" Dialog
@@ -1997,6 +2189,78 @@ function setupGenerator() {
   });
 }
 
+// ---------- Template Badge Layout (Rev 15.0) ----------
+// Estimates the largest font (pt) that lets `text` fit inside a w x h inch box.
+function fitFontPt(text, wIn, hIn, startPt, minPt, charW = 0.52) {
+  const paras = String(text || '').split('\n');
+  let pt = startPt;
+  while (pt > minPt) {
+    const cpl = Math.max(6, Math.floor((wIn * 72) / (pt * charW)));
+    const lines = paras.reduce((a, l) => a + Math.max(1, Math.ceil(l.length / cpl)), 0);
+    if ((lines * pt * 1.22) / 72 <= hIn * 0.9) break;
+    pt -= 1;
+  }
+  return Math.max(minPt, pt);
+}
+
+async function addBadgeLayoutSlide(slide, q, o) {
+  const A = o.tpl.anchors;
+  const charW = o.isHindi ? 0.62 : 0.52;
+  const box = (r) => ({ x: r.left_ratio * o.slideW, y: r.top_ratio * o.slideH, w: r.width_ratio * o.slideW, h: r.height_ratio * o.slideH });
+
+  // ---- Question zone (user-adjustable blue box)
+  const qz = box(state.qBbox);
+  const stemLines = q.question.split('\n');
+  let textW = qz.w;
+  if (q.imageData) textW = qz.w * 0.6;
+  const qText = `Q${q.q_num}. ${q.question}` + (o.solutionMode === 'inline' && q.solution ? '\n' + (q.solution.split('\n')[0] || '') : '');
+  const qPt = fitFontPt(qText, textW, qz.h, Math.round(26 * o.fontScaleFactor), 11, charW);
+
+  const runs = [];
+  runs.push({ text: `Q${q.q_num}. `, options: { fontSize: qPt + 2, bold: true, color: o.colQnumHex, fontFace: o.slideFontFace } });
+  stemLines.forEach((line, i) => {
+    const isStmt = i > 0 && /^(?:\d\.|\([A-Da-d1-4ivx]+\)|•|Statement|Column|कथन|स्तंभ|Assertion|Reason)/.test(line);
+    runs.push({ text: line, options: { fontSize: i === 0 ? qPt : Math.max(10, Math.round(qPt * 0.95)), bold: true, color: isStmt ? o.colStmtHex : o.colStemHex, fontFace: o.slideFontFace, breakLine: true } });
+  });
+  if (o.solutionMode === 'inline' && q.solution) {
+    runs.push({ text: q.solution.split('\n')[0] || '', options: { fontSize: Math.max(10, Math.round(qPt * 0.75)), bold: true, color: o.colAnsHex, fontFace: o.slideFontFace } });
+  }
+  slide.addText(runs, { x: qz.x, y: qz.y, w: textW, h: qz.h, wrap: true, valign: 'middle', fontFace: o.slideFontFace, fit: 'shrink' });
+
+  if (q.imageData) {
+    const dW = qz.w * 0.38, dH = qz.h;
+    slide.addImage({ data: q.imageData, x: qz.x + qz.w * 0.62, y: qz.y, w: dW, h: dH, sizing: { type: 'contain', w: dW, h: dH } });
+  }
+
+  // ---- Options: one text box beside each badge, shared font size so they look uniform
+  const keys = ['A', 'B', 'C', 'D'].filter(k => A.optionRatios[k] && q.options[k]);
+  let optPt = Math.round(28 * o.fontScaleFactor);
+  for (const k of keys) {
+    const z = box(A.optionRatios[k]);
+    optPt = Math.min(optPt, fitFontPt(q.options[k], z.w, z.h, Math.round(28 * o.fontScaleFactor), 10, charW));
+  }
+  for (const k of keys) {
+    const z = box(A.optionRatios[k]);
+    if (isMathExpression(q.options[k])) {
+      const svg = renderMathOptionToSvg(null, q.options[k], optPt, '#' + o.colOptTextHex);
+      const img = await svgToPngDataUrl(svg);
+      let w = img.widthInches, h = img.heightInches;
+      if (w > z.w) { h = h * (z.w / w); w = z.w; }
+      slide.addImage({ data: img.dataUrl, x: z.x, y: z.y + (z.h - h) / 2, w, h });
+    } else {
+      slide.addText([{ text: q.options[k], options: { fontSize: optPt, bold: o.optBold, color: o.colOptTextHex, fontFace: o.slideFontFace } }],
+        { x: z.x, y: z.y, w: z.w, h: z.h, wrap: true, valign: 'middle', fontFace: o.slideFontFace, fit: 'shrink' });
+    }
+  }
+  // Template has fewer badges than the question has options (e.g. only A/B badges): list the rest under the last badge zone
+  const extra = ['A', 'B', 'C', 'D'].filter(k => q.options[k] && !A.optionRatios[k]);
+  if (extra.length && keys.length) {
+    const last = box(A.optionRatios[keys[keys.length - 1]]);
+    const t = extra.map(k => ({ text: `(${k}) ${q.options[k]}`, options: { fontSize: optPt, color: o.colOptTextHex, bold: o.optBold, fontFace: o.slideFontFace, breakLine: true } }));
+    slide.addText(t, { x: last.x, y: last.y + last.h, w: last.w, h: Math.max(0.6, o.slideH - (last.y + last.h) - 0.2), wrap: true, valign: 'top', fontFace: o.slideFontFace });
+  }
+}
+
 function downloadBlobDirectly(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2059,8 +2323,10 @@ function isMathExpression(text) {
   return false;
 }
 
-function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor = "#F5F5F5") {
+function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor = null) {
   if (!optText) return null;
+  defaultColor = defaultColor || (typeof colOptText !== 'undefined' && colOptText ? colOptText.value : '#F5F5F5');
+  const labelColor = (typeof colOptLabel !== 'undefined' && colOptLabel) ? colOptLabel.value : '#FFD700';
 
   const height = Math.round(fontSize * 3.0); // generous height for stacked fraction
   const scale = fontSize / 24;
@@ -2071,7 +2337,7 @@ function renderMathOptionToSvg(optLetter, optText, fontSize = 24, defaultColor =
 
   if (optLetter) {
     const lbl = `(${optLetter}) `;
-    svg += `<text x="${curX}" y="${baselineY}" fill="#FFD700" font-weight="bold">${lbl}</text>`;
+    svg += `<text x="${curX}" y="${baselineY}" fill="${labelColor}" font-weight="bold">${lbl}</text>`;
     curX += lbl.length * fontSize * 0.54;
   }
 
