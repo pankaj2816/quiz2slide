@@ -981,13 +981,15 @@ function formatMathText(str) {
        .replace(/[ \t]+/g, ' ')
        .trim();
 
+  s = s.replace(/\b([NO]),\s+(?=[NO](?:,|-|′))/g, '$1,').replace(/\b(\d),\s+(?=\d(?:,\s*\d)*-[A-Za-z])/g, '$1,'); // N,N- and 2,4-dinitro locants
   return s;
 }
 
 // High-Precision Option Cleaner with Exact Mathematical Fraction & Function Reconstruction
 function cleanOptionText(optRaw) {
   if (!optRaw) return '';
-  let s = optRaw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '');
+  let s = optRaw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, '')
+    .replace(/([A-Za-z])-\s*\n\s*([a-z])/g, '$1-$2'); // re-join words hyphenated at a line break
 
   s = s.replace(/\|/g, ' ')
        .replace(/[ \t]+/g, ' ')
@@ -1339,10 +1341,9 @@ btnParsePdf.addEventListener('click', async () => {
 
     // Link genuine diagrams
     for (const q of state.parsedQuestions) {
-      const match = state.questionDiagrams.find(d => 
-        d.qNum === q.q_num && 
-        d.section.toLowerCase() === q.section.toLowerCase()
-      );
+      const cands = state.questionDiagrams.filter(d => d.qNum === q.q_num);
+      const match = cands.length === 1 ? cands[0]
+        : cands.find(d => (d.section || '').toLowerCase() === (q.section || '').toLowerCase() || (q.section || '').toLowerCase().includes((d.section || '').toLowerCase()));
       if (match) {
         q.imageData = match.dataUrl;
       }
@@ -1375,19 +1376,59 @@ function reflowStemParagraphs(stem) {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    const isSpecialItem = /^(?:\([A-Da-d1-4क-घअ-द१-४I-Vixv]+\)|[1-4१-४]\.|\•|Statement\s+[I|V|X\d]+|कथन\s*[1-4१-४I-V]|Assertion|Reason|अभिकथन|कारण|List-[I|V\d]+|सूची\s*[-–—]?[I|V\d१-४]+|Column\s+[I|V\d]+|स्तंभ\s*[-–—]?[I|V\d१-४]+|Choose\s+the\s+correct|Which\s+of\s+the\s+(?:following|above|statements)|सही\s+उत्तर\s+चुनें|सुमेलित\s+कीजिए|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
+    const isSpecialItem = /^(?:\([A-Da-d1-4क-घअ-द१-४I-Vixv]+\)|[1-4१-४]\.|\•|Statement\s+[I|V|X\d]+|कथन\s*[1-4१-४I-V]|Assertion|Reason|अभिकथन|कारण|List-[I|V\d]+|सूची\s*[-–—]?[I|V\d१-४]+|Column\s+[I|V\d]+|स्तंभ\s*[-–—]?[I|V\d१-४]+|Choose\s+the\s+correct|Which\s+of\s+(?:these|those)\b|Which\s+of\s+the\s+(?:following|above|given|statements|pairs)|सही\s+उत्तर\s+चुनें|सुमेलित\s+कीजिए|x₁\s*=|where\s+x\s+is|where\s+P|\(P\s*\+\s*a\/V²\))/i.test(line);
     const prevEndsColon = /[:।]\s*$/.test(currentPara);
     const prevIsFormula = !/^\(\s*(?:[A-Da-d1-4]|i{1,3}|iv)\s*\)\s/.test(currentPara) && /^(?:x₁\s*=|(?:\([A-Za-z0-9_\s\+\/²]+\)))/i.test(currentPara);
 
     if (isSpecialItem || prevEndsColon || prevIsFormula) {
       result.push(currentPara);
       currentPara = line;
+    } else if (/[A-Za-z]-$/.test(currentPara) && /^[a-z]/.test(line)) {
+      currentPara += line; // word hyphenated across a line break ("face-" + "to-face")
     } else {
       currentPara += " " + line;
     }
   }
   result.push(currentPara);
   return result.join('\n');
+}
+
+// Option marker helpers (Rev 15.1)
+const OPT_LABEL_INDEX = { A: 0, B: 1, C: 2, D: 3, a: 0, b: 1, c: 2, d: 3, '1': 0, '2': 1, '3': 2, '4': 3,
+  'क': 0, 'ख': 1, 'ग': 2, 'घ': 3, 'अ': 0, 'ब': 1, 'स': 2, 'द': 3, '१': 0, '२': 1, '३': 2, '४': 3 };
+function optMarkerLabel(m) { return (m[1] || m[2] || m[3] || m[4] || '').trim(); }
+function optMarkerFamily(lbl, raw) {
+  const style = /\(/.test(raw || '') ? 'p' : 'b'; // "(A)" vs bare "A." are different styles
+  return optMarkerFamilyBase(lbl) + style;
+}
+function optMarkerFamilyBase(lbl) {
+  if (/^[A-D]$/.test(lbl)) return 'upper';
+  if (/^[a-d]$/.test(lbl)) return 'lower';
+  if (/^[1-4]$/.test(lbl)) return 'digit';
+  if (/^[१-४]$/.test(lbl)) return 'devdigit';
+  if (/^[क-घ]$/.test(lbl)) return 'ka';
+  if (/^[अबसद]$/.test(lbl)) return 'a-ba';
+  return 'roman';
+}
+function pickOrderedOptionMarkers(ms) {
+  // last ordered A→B→C→D run for each marker style; uppercase "(A)" styles win over lowercase "(a)" statements
+  const PRIORITY = ['upperp', 'digitp', 'kap', 'a-bap', 'devdigitp', 'upperb', 'digitb', 'kab', 'a-bab', 'devdigitb', 'lowerp', 'lowerb'];
+  const runs = {};
+  for (let i = ms.length - 1; i >= 3; i--) {
+    const lblD = optMarkerLabel(ms[i]);
+    if (OPT_LABEL_INDEX[lblD] !== 3 || optMarkerFamilyBase(lblD) === 'roman') continue;
+    const fam = optMarkerFamily(lblD, ms[i][0]);
+    if (runs[fam]) continue;
+    const picked = [ms[i]];
+    let need = 2;
+    for (let j = i - 1; j >= 0 && need >= 0; j--) {
+      const l = optMarkerLabel(ms[j]);
+      if (optMarkerFamily(l, ms[j][0]) === fam && OPT_LABEL_INDEX[l] === need) { picked.unshift(ms[j]); need--; }
+    }
+    if (picked.length === 4) runs[fam] = picked;
+  }
+  for (const f of PRIORITY) if (runs[f]) return runs[f];
+  return null;
 }
 
 // Universal Question Parser: Handles Standard Exams, Hindi & Devanagari, Careers360, JEE, NEET, CBSE
@@ -1458,7 +1499,7 @@ function parseUniversalQuestions(fullStream) {
     }
 
     // Precise option marker pattern: matches (A), (B), (C), (D), (1), (2), (3), (4), (क), (ख), (ग), (घ), (अ), (ब), (स), (द), (१), (२), (३), (४)
-    const optPat = /(?:^|[\s\n\r])(?:(?:Option|विकल्प)\s*(?:\(\s*([1-4A-Da-dक-घअ-द१-४])\s*\)|([1-4A-Da-dक-घअ-द१-४]))\s*:|\(\s*([A-Da-d1-4क-घअ-द१-४]|i{1,3}|iv|v|vi{0,3}|ix|x)\s*\)|([A-Da-d1-4])[\.\)])\s*/gi;
+    const optPat = /(?<=^|\s)(?:(?:Option|विकल्प)\s*(?:\(\s*([1-4A-Da-dक-घअ-द१-४])\s*\)|([1-4A-Da-dक-घअ-द१-४]))\s*:|\(\s*([A-Da-d1-4क-घअ-द१-४]|i{1,3}|iv|v|vi{0,3}|ix|x)\s*\)|([A-Da-d1-4])[\.\)](?=[ \t]*\S))[ \t]*/gi;
     let optMatches = [];
     let om;
     while ((om = optPat.exec(qaChunk)) !== null) {
@@ -1469,11 +1510,14 @@ function parseUniversalQuestions(fullStream) {
     let optA = '', optB = '', optC = '', optD = '';
     let optLabels = { A: '(A)', B: '(B)', C: '(C)', D: '(D)' };
 
-    if (optMatches.length >= 4) {
-      const mA = optMatches[optMatches.length - 4];
-      const mB = optMatches[optMatches.length - 3];
-      const mC = optMatches[optMatches.length - 2];
-      const mD = optMatches[optMatches.length - 1];
+    // Pick the LAST correctly ordered A→B→C→D marker run of one style, so markers inside option text
+    // ("Both (A) & (B)", "(a), (b) and (c) are correct") or numbered statements don't scramble the options.
+    const ordered = pickOrderedOptionMarkers(optMatches);
+    if (ordered || optMatches.length >= 4) {
+      const mA = ordered ? ordered[0] : optMatches[optMatches.length - 4];
+      const mB = ordered ? ordered[1] : optMatches[optMatches.length - 3];
+      const mC = ordered ? ordered[2] : optMatches[optMatches.length - 2];
+      const mD = ordered ? ordered[3] : optMatches[optMatches.length - 1];
 
       const rawA = (mA[1] || mA[2] || mA[3] || mA[4] || 'A').trim();
       const rawB = (mB[1] || mB[2] || mB[3] || mB[4] || 'B').trim();
@@ -1689,7 +1733,8 @@ function setupGenerator() {
         const slide = useBgMaster
           ? pptx.addSlide({ masterName: "CHALKBOARD_MASTER" })
           : pptx.addSlide();
-        slideKinds.push('q');
+        const hasAnyOption = ['A', 'B', 'C', 'D'].some(k => q.options[k]);
+        slideKinds.push(badgeMode && !hasAnyOption ? 'qnoopt' : 'q');
 
         const stemLines = q.question.split('\n');
         const maxOptLen = Math.max(
@@ -2208,8 +2253,10 @@ async function addBadgeLayoutSlide(slide, q, o) {
   const charW = o.isHindi ? 0.62 : 0.52;
   const box = (r) => ({ x: r.left_ratio * o.slideW, y: r.top_ratio * o.slideH, w: r.width_ratio * o.slideW, h: r.height_ratio * o.slideH });
 
-  // ---- Question zone (user-adjustable blue box)
+  // ---- Question zone (user-adjustable blue box); questions without options use the area down to the bottom
   const qz = box(state.qBbox);
+  const noOptions = !['A', 'B', 'C', 'D'].some(k => q.options[k]);
+  if (noOptions) qz.h = Math.max(qz.h, o.slideH * 0.9 - qz.y);
   const stemLines = q.question.split('\n');
   let textW = qz.w;
   if (q.imageData) textW = qz.w * 0.6;
@@ -2225,7 +2272,7 @@ async function addBadgeLayoutSlide(slide, q, o) {
   if (o.solutionMode === 'inline' && q.solution) {
     runs.push({ text: q.solution.split('\n')[0] || '', options: { fontSize: Math.max(10, Math.round(qPt * 0.75)), bold: true, color: o.colAnsHex, fontFace: o.slideFontFace } });
   }
-  slide.addText(runs, { x: qz.x, y: qz.y, w: textW, h: qz.h, wrap: true, valign: 'middle', fontFace: o.slideFontFace, fit: 'shrink' });
+  slide.addText(runs, { x: qz.x, y: qz.y, w: textW, h: qz.h, wrap: true, valign: noOptions ? 'top' : 'middle', fontFace: o.slideFontFace, fit: 'shrink' });
 
   if (q.imageData) {
     const dW = qz.w * 0.38, dH = qz.h;

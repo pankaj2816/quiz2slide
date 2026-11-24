@@ -200,6 +200,8 @@
           const sx = ew / cw, sy = eh / ch;
           childMap = (x, y, w, h) => mapFn(ox + (x - cxo) * sx, oy + (y - cyo) * sy, w * sx, h * sy);
           gBox = mapFn(ox, oy, ew, eh);
+          const gc = path(el, 'nvGrpSpPr', 'cNvPr');
+          gBox.id = gc ? gc.getAttribute('id') : null;
         }
         const gp = kid(el, 'grpSpPr');
         const gFill = gp ? (kid(gp, 'solidFill') || (kid(gp, 'noFill') ? 'none' : null)) : null;
@@ -258,9 +260,9 @@
   function removeShapesById(xml, ids) {
     if (!ids || !ids.length) return xml;
     const doc = parseXml(xml);
-    const all = Array.from(doc.getElementsByTagName('*')).filter(e => e.localName === 'sp');
+    const all = Array.from(doc.getElementsByTagName('*')).filter(e => e.localName === 'sp' || e.localName === 'grpSp');
     for (const sp of all) {
-      const c = path(sp, 'nvSpPr', 'cNvPr');
+      const c = path(sp, 'nvSpPr', 'cNvPr') || path(sp, 'nvGrpSpPr', 'cNvPr');
       if (c && ids.includes(c.getAttribute('id')) && sp.parentNode) sp.parentNode.removeChild(sp);
     }
     let out = new XMLSerializer().serializeToString(doc);
@@ -275,21 +277,22 @@
     const spTree = Array.from(doc.getElementsByTagName('*')).find(e => e.localName === 'spTree');
     if (!spTree) return null;
     const slideArea = tpl.cx * tpl.cy;
-    const found = { options: {} };
+    const found = { options: {}, badgeIds: [] };
     walkTree(spTree, (n) => {
       if (n.type !== 'sp' || !n.box) return;
       const t = shapeText(n.el);
       if (!t || t.length > 24) return;
       // badge box = innermost small group around the text (e.g. bubble + text), else the shape itself
       let box = n.box;
+      let shapeId = (path(n.el, 'nvSpPr', 'cNvPr') || { getAttribute: () => null }).getAttribute('id');
       for (let i = n.groupStack.length - 1; i >= 0; i--) {
         const g = n.groupStack[i];
-        if (g.w * g.h < slideArea * 0.12) { box = g; break; }
+        if (g.w * g.h < slideArea * 0.12) { box = g; if (g.id) shapeId = g.id; break; }
       }
       const ob = t.match(/^[\(\[]?\s*([A-Da-d1-4क-घअबसद])\s*[\)\]]?\s*[\.:\)]?$/);
       if (ob) {
         const key = BADGE_MAP[ob[1].toLowerCase()] || BADGE_MAP[ob[1]];
-        if (key && !found.options[key]) found.options[key] = { x: box.x, y: box.y, w: box.w, h: box.h };
+        if (key && !found.options[key]) { found.options[key] = { x: box.x, y: box.y, w: box.w, h: box.h }; if (shapeId) found.badgeIds.push(shapeId); }
         return;
       }
       if (/^(?:q(?:uestion|ues|ue)?s?\.?|प्रश्न|प्र\.)\s*(?:no\.?|number|संख्या)?\s*[:\.\-]?\s*\d{0,3}\s*$/i.test(t)) {
@@ -305,7 +308,7 @@
   function computeTextZones(tpl, found) {
     const W = tpl.cx, H = tpl.cy;
     const marginR = W * 0.045, gap = W * 0.008;
-    const res = { questionBadge: found.question || null, badges: found.options, optionZones: {}, questionZone: null };
+    const res = { questionBadge: found.question || null, badges: found.options, badgeIds: found.badgeIds || [], optionZones: {}, questionZone: null };
     const opts = found.options;
     const keys = ['A', 'B', 'C', 'D'].filter(k => opts[k]);
 
@@ -649,7 +652,9 @@
       let sid = 5000;
       shapes = shapes.replace(/<p:cNvPr id="\d+"/g, () => `<p:cNvPr id="${sid++}"`);
 
-      const base = isSolution ? blankSlide : tplSlide;
+      const base = isSolution ? blankSlide
+        : (kinds && kinds[i] === 'qnoopt' && tpl.anchors && tpl.anchors.badgeIds && tpl.anchors.badgeIds.length)
+          ? removeShapesById(tplSlide, tpl.anchors.badgeIds) : tplSlide;
       const at = base.lastIndexOf('</p:spTree>');
       const slideXml = base.slice(0, at) + shapes + base.slice(at);
       out.file(newPart, slideXml);
