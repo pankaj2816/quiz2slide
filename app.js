@@ -2362,7 +2362,12 @@ function isMathExpression(text) {
   if (!text) return false;
   if (text.includes('√')) return true;
   if (/(?:cos⁻¹|sin⁻¹|tan⁻¹)\s*\([^\)]+\/[^\)]+\)/i.test(text)) return true;
-  if (/^\s*[−\-]?\s*[α-ωΑ-Ωa-zA-Z0-9_]+\s*\/\s*[α-ωΑ-Ωa-zA-Z0-9_ϵ₀μᵣ]+\s*$/i.test(text)) return true;
+  if (/^\s*[−\-]?\s*[α-ωΑ-Ωa-zA-Z0-9_]+\s*\/\s*[α-ωΑ-Ωa-zA-Z0-9_ϵ₀μᵣ]+\s*$/i.test(text)) {
+    // chemistry reagents such as "Sn/HCl", "Fe/HCl", "CuCN/KCN", "H2/Pt" are not fractions
+    const sides = text.split('/').map(t => t.trim().replace(/^[−\-]/, ''));
+    const chemLike = t => t.length >= 2 && (/[A-Z][a-z]/.test(t) || /[A-Z]{2}/.test(t) || /^[A-Z][0-9₀-₉]+$/.test(t));
+    if (!sides.some(chemLike)) return true;
+  }
   if (/^\(\s*[^\/]+\/[^,]+,\s*[^,]+,\s*[^)]+\)$/.test(text)) return true;
   if (/^[χx]\s*=\s*(?:\([^/]+\/[^)]+\)|1|\d+)\s*[−\-\+]\s*(?:\([^/]+\/[^)]+\)|1|\d+)$/i.test(text)) return true;
   if (/^\(\s*[^/]+?\s*[+\-−]\s*[^/]+?\s*\/\s*[^)]+?\s*\)/.test(text)) return true;
